@@ -1,0 +1,34 @@
+[package]
+name = "wallet-jobs"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wallet-jobs"
+path = "src/main.rs"
+
+[dependencies]
+wallet-types = { workspace = true }
+wallet-error = { workspace = true }
+wallet-config = { workspace = true }
+wallet-chain = { workspace = true }
+wallet-db = { workspace = true }
+wallet-events = { workspace = true }
+wallet-domain = { workspace = true }
+wallet-proto = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
+toasty = { workspace = true }
+rust_decimal = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+jiff = { version = "0.2", features = ["serde"] }
+clickhouse = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
+futures = "0.3"

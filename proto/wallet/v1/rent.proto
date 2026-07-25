@@ -1,0 +1,28 @@
+syntax = "proto3";
+package wallet.v1;
+
+service RentService {
+  rpc EstimateEnergy(EstimateEnergyRequest) returns (EstimateEnergyResponse);
+  rpc OrderRent(OrderRentRequest) returns (OrderRentResponse);
+}
+
+message EstimateEnergyRequest {
+  string address = 1;
+  uint64 energy = 2;
+}
+
+message EstimateEnergyResponse {
+  string price = 1;
+  uint64 duration_hours = 2;
+}
+
+message OrderRentRequest {
+  string address = 1;
+  uint64 energy = 2;
+  uint64 duration_hours = 3;
+}
+
+message OrderRentResponse {
+  string order_id = 1;
+  string status = 2;
+}

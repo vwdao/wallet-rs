@@ -1,0 +1,29 @@
+[package]
+name = "wallet-api"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wallet-api"
+path = "src/main.rs"
+
+[dependencies]
+wallet-types = { workspace = true }
+wallet-error = { workspace = true }
+wallet-config = { workspace = true }
+wallet-proto = { workspace = true }
+wallet-chain = { workspace = true }
+wallet-db = { workspace = true }
+wallet-events = { workspace = true }
+wallet-domain = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+toasty = { workspace = true }
+jiff = { version = "0.2", features = ["serde"] }

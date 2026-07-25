@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-namespace.yaml
+  - 01-secrets.yaml
+  - 10-postgres.yaml
+  - 11-redis.yaml
+  - 12-nats.yaml
+  - 20-wallet-api.yaml
+  - 21-apigw-app.yaml
+  - 22-apigw-admin.yaml
+  - 23-apigw-webhook.yaml
+  - 24-chain-gateway.yaml
+  - 25-wallet-ws.yaml
+  - 30-wallet-sync.yaml
+  - 31-wallet-jobs.yaml
+  - 40-ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: wallet

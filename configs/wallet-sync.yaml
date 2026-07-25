@@ -1,0 +1,14 @@
+chain_index: 60
+poll_interval_ms: 2000
+database:
+  url: "postgres://wallet:wallet@127.0.0.1:5432/wallet"
+nats:
+  url: "nats://127.0.0.1:4222"
+chain:
+  chain_index: 60
+  family: evm
+  evm_chain_id: 1
+  confirmations: 12
+  endpoints:
+    - url: "https://eth.llamarpc.com"
+      weight: 1

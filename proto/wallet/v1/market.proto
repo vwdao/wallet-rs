@@ -1,0 +1,38 @@
+syntax = "proto3";
+package wallet.v1;
+
+import "wallet/v1/common.proto";
+
+service MarketService {
+  rpc GetPrice(GetPriceRequest) returns (Price);
+  rpc GetKlines(GetKlinesRequest) returns (GetKlinesResponse);
+}
+
+message Price {
+  string symbol = 1;
+  string price = 2;
+  int64 updated_at_unix = 3;
+}
+
+message GetPriceRequest {
+  string symbol = 1;
+}
+
+message GetKlinesRequest {
+  string symbol = 1;
+  string interval = 2;
+  Pagination pagination = 3;
+}
+
+message Kline {
+  int64 open_time = 1;
+  string open = 2;
+  string high = 3;
+  string low = 4;
+  string close = 5;
+  string volume = 6;
+}
+
+message GetKlinesResponse {
+  repeated Kline items = 1;
+}

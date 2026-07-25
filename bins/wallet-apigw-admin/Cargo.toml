@@ -1,0 +1,22 @@
+[package]
+name = "wallet-apigw-admin"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wallet-apigw-admin"
+path = "src/main.rs"
+
+[dependencies]
+wallet-config = { workspace = true }
+wallet-error = { workspace = true }
+wallet-proto = { workspace = true }
+salvo = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+jsonwebtoken = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

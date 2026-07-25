@@ -1,0 +1,14 @@
+[package]
+name = "wallet-test-support"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wallet-types = { workspace = true }
+wallet-events = { workspace = true }
+wallet-chain = { workspace = true }
+wallet-config = { workspace = true }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

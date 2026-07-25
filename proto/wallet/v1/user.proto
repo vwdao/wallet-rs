@@ -1,0 +1,38 @@
+syntax = "proto3";
+package wallet.v1;
+
+import "wallet/v1/common.proto";
+
+service UserService {
+  rpc GetUser(GetUserRequest) returns (User);
+  rpc Register(RegisterRequest) returns (User);
+  rpc ListAddresses(ListAddressesRequest) returns (ListAddressesResponse);
+}
+
+message User {
+  string id = 1;
+  string external_id = 2;
+  int64 created_at_unix = 3;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+message RegisterRequest {
+  string external_id = 1;
+}
+
+message ListAddressesRequest {
+  string user_id = 1;
+  int64 chain_index = 2;
+}
+
+message AddressInfo {
+  string address = 1;
+  int64 chain_index = 2;
+}
+
+message ListAddressesResponse {
+  repeated AddressInfo items = 1;
+}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+package wallet.v1;
+
+message Pagination {
+  uint32 page = 1;
+  uint32 page_size = 2;
+}
+
+message PageMeta {
+  uint32 page = 1;
+  uint32 page_size = 2;
+  uint64 total = 3;
+}
+
+message Empty {}

@@ -1,0 +1,13 @@
+[package]
+name = "wallet-error"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wallet-types = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+salvo = { workspace = true }
+tonic = { workspace = true }
+http = { workspace = true }

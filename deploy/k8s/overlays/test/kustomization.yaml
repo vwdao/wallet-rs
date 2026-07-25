@@ -1,0 +1,442 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: wallet-test
+
+resources:
+  - ../../base
+
+patches:
+  # ── Namespace ──
+  - target:
+      kind: Namespace
+      name: wallet
+    patch: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: wallet
+        labels:
+          env: test
+
+  # ── Secrets ──
+  - target:
+      kind: Secret
+      name: wallet-secrets
+    patch: |
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: wallet-secrets
+      stringData:
+        POSTGRES_PASSWORD: "test-password-change-in-production"
+        JWT_SECRET: "test-jwt-secret-change-in-production"
+        JWT_ISSUER: "viva-wallet-test"
+        ADMIN_JWT_SECRET: "test-admin-jwt-secret"
+        ADMIN_JWT_ISSUER: "viva-wallet-admin-test"
+
+  # ── PostgreSQL ──
+  - target:
+      kind: Deployment
+      name: postgres
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: postgres
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: postgres
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 256Mi
+                  limits:
+                    cpu: 500m
+                    memory: 512Mi
+  - target:
+      kind: PersistentVolumeClaim
+      name: postgres-pvc
+    patch: |
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: postgres-pvc
+      spec:
+        resources:
+          requests:
+            storage: 10Gi
+
+  # ── Redis ──
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: redis
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: redis
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 128Mi
+
+  # ── NATS ──
+  - target:
+      kind: Deployment
+      name: nats
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nats
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: nats
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 256Mi
+
+  # ── wallet-api ──
+  - target:
+      kind: Deployment
+      name: wallet-api
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-api
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: wallet-api
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                  - name: ETH_RPC_URL
+                    value: "https://eth.llamarpc.com"
+                  - name: SOL_RPC_URL
+                    value: "https://api.mainnet-beta.solana.com"
+                  - name: BTC_RPC_URL
+                    value: "https://blockstream.info/api"
+                  - name: TRON_RPC_URL
+                    value: "https://api.trongrid.io"
+                  - name: CLICKHOUSE_URL
+                    value: ""
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── apigw-app ──
+  - target:
+      kind: Deployment
+      name: wallet-apigw-app
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-apigw-app
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: wallet-apigw-app
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── apigw-admin ──
+  - target:
+      kind: Deployment
+      name: wallet-apigw-admin
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-apigw-admin
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-apigw-admin
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── apigw-webhook ──
+  - target:
+      kind: Deployment
+      name: wallet-apigw-webhook
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-apigw-webhook
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-apigw-webhook
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 128Mi
+
+  # ── chain-gateway ──
+  - target:
+      kind: Deployment
+      name: wallet-chain-gateway
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-chain-gateway
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-chain-gateway
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── wallet-ws ──
+  - target:
+      kind: Deployment
+      name: wallet-ws
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-ws
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: wallet-ws
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 128Mi
+
+  # ── wallet-sync (all chains) ──
+  - target:
+      kind: Deployment
+      name: wallet-sync-eth
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-eth
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                  - name: ETH_RPC_URL
+                    value: "https://eth.llamarpc.com"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  - target:
+      kind: Deployment
+      name: wallet-sync-sol
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-sol
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                  - name: SOL_RPC_URL
+                    value: "https://api.mainnet-beta.solana.com"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  - target:
+      kind: Deployment
+      name: wallet-sync-tron
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-tron
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                  - name: TRON_RPC_URL
+                    value: "https://api.trongrid.io"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── wallet-jobs ──
+  - target:
+      kind: Deployment
+      name: wallet-jobs
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-jobs
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-jobs
+                env:
+                  - name: RUST_LOG
+                    value: "info"
+                  - name: ETH_RPC_URL
+                    value: "https://eth.llamarpc.com"
+                  - name: SOL_RPC_URL
+                    value: "https://api.mainnet-beta.solana.com"
+                  - name: TRON_RPC_URL
+                    value: "https://api.trongrid.io"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── Ingress ──
+  - target:
+      kind: Ingress
+      name: wallet-ingress
+    patch: |
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: wallet-ingress
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: web
+      spec:
+        rules:
+          - host: wallet-test.local
+            http:
+              paths:
+                - path: /api
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-apigw-app
+                      port:
+                        number: 8080
+                - path: /admin
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-apigw-admin
+                      port:
+                        number: 8081
+                - path: /ws
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-ws
+                      port:
+                        number: 8090
+                - path: /rpc
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-chain-gateway
+                      port:
+                        number: 8545

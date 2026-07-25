@@ -1,0 +1,20 @@
+[package]
+name = "wallet-apigw-webhook"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "wallet-apigw-webhook"
+path = "src/main.rs"
+
+[dependencies]
+wallet-config = { workspace = true }
+wallet-error = { workspace = true }
+wallet-events = { workspace = true }
+salvo = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

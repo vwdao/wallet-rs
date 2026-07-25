@@ -1,0 +1,40 @@
+listen: "0.0.0.0:9000"
+database:
+  url: "postgres://wallet:wallet@127.0.0.1:5432/wallet"
+  max_connections: 16
+redis:
+  url: "redis://127.0.0.1:6379"
+nats:
+  url: "nats://127.0.0.1:4222"
+clickhouse:
+  url: "http://127.0.0.1:8123"
+  database: "wallet"
+jwt:
+  secret: "dev-secret-change-me"
+  issuer: "viva-wallet"
+chains:
+  - chain_index: 60
+    family: evm
+    evm_chain_id: 1
+    confirmations: 12
+    endpoints:
+      - url: "https://eth.llamarpc.com"
+        weight: 1
+  - chain_index: 501
+    family: solana
+    confirmations: 32
+    endpoints:
+      - url: "https://api.mainnet-beta.solana.com"
+        weight: 1
+  - chain_index: 0
+    family: bitcoin
+    confirmations: 3
+    endpoints:
+      - url: "https://blockstream.info/api"
+        weight: 1
+  - chain_index: 195
+    family: tron
+    confirmations: 20
+    endpoints:
+      - url: "https://api.trongrid.io"
+        weight: 1

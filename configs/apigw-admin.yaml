@@ -1,0 +1,5 @@
+listen: "0.0.0.0:8081"
+grpc_endpoint: "http://127.0.0.1:9000"
+jwt:
+  secret: "dev-admin-secret-change-me"
+  issuer: "viva-wallet-admin"

@@ -1,0 +1,38 @@
+syntax = "proto3";
+package wallet.v1;
+
+service SwapService {
+  rpc Quote(QuoteRequest) returns (QuoteResponse);
+  rpc BuildSwap(BuildSwapRequest) returns (BuildSwapResponse);
+}
+
+message QuoteRequest {
+  int64 chain_index = 1;
+  string from_token = 2;
+  string to_token = 3;
+  string amount = 4;
+  string provider = 5;
+}
+
+message QuoteResponse {
+  string provider = 1;
+  string amount_out = 2;
+  string route_json = 3;
+}
+
+message BuildSwapRequest {
+  int64 chain_index = 1;
+  string from_token = 2;
+  string to_token = 3;
+  string amount = 4;
+  string slippage_bps = 5;
+  string user_address = 6;
+  string provider = 7;
+}
+
+message BuildSwapResponse {
+  string provider = 1;
+  bytes tx_data = 2;
+  string to_address = 3;
+  string value = 4;
+}

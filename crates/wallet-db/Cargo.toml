@@ -1,0 +1,20 @@
+[package]
+name = "wallet-db"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+wallet-types = { workspace = true }
+wallet-error = { workspace = true }
+wallet-config = { workspace = true }
+toasty = { workspace = true }
+clickhouse = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+rust_decimal = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+jiff = { workspace = true }

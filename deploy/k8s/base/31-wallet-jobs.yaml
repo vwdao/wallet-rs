@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wallet-jobs-cm
+  namespace: wallet
+data:
+  wallet-jobs.yaml.tmpl: |
+    database:
+      url: "postgres://wallet:${POSTGRES_PASSWORD}@postgres:5432/wallet"
+    redis:
+      url: "redis://redis:6379"
+    nats:
+      url: "nats://nats:4222"
+    chains:
+      - chain_index: 60
+        family: evm
+        evm_chain_id: 1
+        confirmations: 12
+        endpoints:
+          - url: "${ETH_RPC_URL}"
+            weight: 1
+      - chain_index: 501
+        family: solana
+        confirmations: 32
+        endpoints:
+          - url: "${SOL_RPC_URL}"
+            weight: 1
+      - chain_index: 195
+        family: tron
+        confirmations: 20
+        endpoints:
+          - url: "${TRON_RPC_URL}"
+            weight: 1
+  start.sh: |
+    #!/bin/sh
+    envsubst < /etc/wallet-template/wallet-jobs.yaml.tmpl > /tmp/cfg.yaml
+    exec /app/wallet-jobs --config /tmp/cfg.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-jobs
+  namespace: wallet
+  labels:
+    app: wallet-jobs
+    tier: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wallet-jobs
+  template:
+    metadata:
+      labels:
+        app: wallet-jobs
+        tier: worker
+    spec:
+      containers:
+        - name: wallet-jobs
+          image: wallet:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/scripts/start.sh"]
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: POSTGRES_PASSWORD
+            - name: ETH_RPC_URL
+              value: "https://eth.llamarpc.com"
+            - name: SOL_RPC_URL
+              value: "https://api.mainnet-beta.solana.com"
+            - name: TRON_RPC_URL
+              value: "https://api.trongrid.io"
+            - name: ONEINCH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: ONEINCH_API_KEY
+                  optional: true
+            - name: OKX_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: OKX_API_KEY
+                  optional: true
+            - name: OKX_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: OKX_SECRET
+                  optional: true
+            - name: OKX_PASSPHRASE
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: OKX_PASSPHRASE
+                  optional: true
+            - name: METAPATH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: METAPATH_API_KEY
+                  optional: true
+          volumeMounts:
+            - name: config-template
+              mountPath: /etc/wallet-template
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: config
+              mountPath: /tmp/cfg.yaml
+              subPath: cfg.yaml
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config-template
+          configMap:
+            name: wallet-jobs-cm
+            items:
+              - key: wallet-jobs.yaml.tmpl
+                path: wallet-jobs.yaml.tmpl
+        - name: scripts
+          configMap:
+            name: wallet-jobs-cm
+            items:
+              - key: start.sh
+                path: start.sh
+                mode: 0755
+        - name: config
+          emptyDir: {}

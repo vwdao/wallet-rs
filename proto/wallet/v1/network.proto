@@ -1,0 +1,38 @@
+syntax = "proto3";
+package wallet.v1;
+
+import "wallet/v1/common.proto";
+
+service NetworkService {
+  rpc ListNetworks(ListNetworksRequest) returns (ListNetworksResponse);
+  rpc GetNetwork(GetNetworkRequest) returns (Network);
+  rpc GetTip(GetTipRequest) returns (GetTipResponse);
+}
+
+message Network {
+  int64 chain_index = 1;
+  string name = 2;
+  string family = 3;
+  uint64 evm_chain_id = 4;
+  bool enabled = 5;
+}
+
+message ListNetworksRequest {
+  bool enabled_only = 1;
+}
+
+message ListNetworksResponse {
+  repeated Network items = 1;
+}
+
+message GetNetworkRequest {
+  int64 chain_index = 1;
+}
+
+message GetTipRequest {
+  int64 chain_index = 1;
+}
+
+message GetTipResponse {
+  uint64 block_number = 1;
+}

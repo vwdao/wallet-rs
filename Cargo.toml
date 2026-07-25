@@ -1,0 +1,80 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/wallet-types",
+    "crates/wallet-error",
+    "crates/wallet-config",
+    "crates/wallet-proto",
+    "crates/wallet-chain",
+    "crates/wallet-db",
+    "crates/wallet-events",
+    "crates/wallet-domain",
+    "crates/wallet-test-support",
+    "bins/wallet-api",
+    "bins/wallet-apigw-app",
+    "bins/wallet-apigw-admin",
+    "bins/wallet-apigw-webhook",
+    "bins/wallet-sync",
+    "bins/wallet-jobs",
+    "bins/wallet-ws",
+    "bins/wallet-chain-gateway",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Proprietary"
+authors = ["Viva Wallet"]
+
+[workspace.dependencies]
+wallet-types = { path = "crates/wallet-types" }
+wallet-error = { path = "crates/wallet-error" }
+wallet-config = { path = "crates/wallet-config" }
+wallet-proto = { path = "crates/wallet-proto" }
+wallet-chain = { path = "crates/wallet-chain" }
+wallet-db = { path = "crates/wallet-db" }
+wallet-events = { path = "crates/wallet-events" }
+wallet-domain = { path = "crates/wallet-domain" }
+wallet-test-support = { path = "crates/wallet-test-support" }
+
+anyhow = "1"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["ws", "macros"] }
+salvo = { version = "0.95", features = ["websocket", "cors", "oapi"] }
+bytes = "1"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive", "env"] }
+futures = "0.3"
+http = "1"
+hex = "0.4"
+jsonwebtoken = "9"
+prost = "0.13"
+prost-types = "0.13"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+rust_decimal = { version = "1", features = ["serde-with-str"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+sha2 = "0.10"
+hmac = "0.12"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+tonic = "0.12"
+tonic-build = "0.12"
+tower = "0.5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+async-nats = "0.39"
+fred = { version = "10", default-features = false, features = ["enable-rustls", "subscriber-client"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "uuid", "rust_decimal", "migrate"] }
+toasty = { version = "0.9", features = ["postgresql", "jiff", "rust_decimal", "serde"] }
+clickhouse = { version = "0.13", features = ["time", "uuid"] }
+tokio-tungstenite = "0.26"
+base64 = "0.22"
+dashmap = "6"
+parking_lot = "0.12"
+rand = "0.8"
+url = "2"
+jiff = { version = "0.2", features = ["serde"] }

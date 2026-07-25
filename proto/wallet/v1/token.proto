@@ -1,0 +1,51 @@
+syntax = "proto3";
+package wallet.v1;
+
+import "wallet/v1/common.proto";
+
+service TokenService {
+  rpc GetToken(GetTokenRequest) returns (Token);
+  rpc ListTokens(ListTokensRequest) returns (ListTokensResponse);
+  rpc GetBalances(GetBalancesRequest) returns (GetBalancesResponse);
+}
+
+message Token {
+  string id = 1;
+  int64 chain_index = 2;
+  string address = 3;
+  string symbol = 4;
+  string name = 5;
+  uint32 decimals = 6;
+  string logo_url = 7;
+}
+
+message GetTokenRequest {
+  int64 chain_index = 1;
+  string address = 2;
+}
+
+message ListTokensRequest {
+  int64 chain_index = 1;
+  Pagination pagination = 2;
+}
+
+message ListTokensResponse {
+  repeated Token items = 1;
+  PageMeta meta = 2;
+}
+
+message GetBalancesRequest {
+  int64 chain_index = 1;
+  string wallet = 2;
+  repeated string tokens = 3;
+}
+
+message BalanceItem {
+  string token = 1;
+  string amount = 2;
+  uint32 decimals = 3;
+}
+
+message GetBalancesResponse {
+  repeated BalanceItem items = 1;
+}

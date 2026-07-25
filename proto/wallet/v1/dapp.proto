@@ -1,0 +1,30 @@
+syntax = "proto3";
+package wallet.v1;
+
+import "wallet/v1/common.proto";
+
+service DappService {
+  rpc ListDapps(ListDappsRequest) returns (ListDappsResponse);
+  rpc GetDapp(GetDappRequest) returns (Dapp);
+}
+
+message Dapp {
+  string id = 1;
+  string name = 2;
+  string url = 3;
+  string logo_url = 4;
+  repeated int64 chain_indexes = 5;
+}
+
+message ListDappsRequest {
+  Pagination pagination = 1;
+}
+
+message ListDappsResponse {
+  repeated Dapp items = 1;
+  PageMeta meta = 2;
+}
+
+message GetDappRequest {
+  string id = 1;
+}

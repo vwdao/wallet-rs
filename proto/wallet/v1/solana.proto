@@ -1,0 +1,28 @@
+syntax = "proto3";
+package wallet.v1;
+
+service SolanaService {
+  rpc GetAta(GetAtaRequest) returns (GetAtaResponse);
+  rpc EnsureAta(EnsureAtaRequest) returns (EnsureAtaResponse);
+}
+
+message GetAtaRequest {
+  string owner = 1;
+  string mint = 2;
+}
+
+message GetAtaResponse {
+  string ata = 1;
+  bool exists = 2;
+}
+
+message EnsureAtaRequest {
+  string owner = 1;
+  string mint = 2;
+  string payer = 3;
+}
+
+message EnsureAtaResponse {
+  string ata = 1;
+  bytes create_ix = 2;
+}

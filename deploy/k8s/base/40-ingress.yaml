@@ -1,0 +1,55 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wallet-ingress
+  namespace: wallet
+  annotations:
+    # k3s uses traefik by default
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  rules:
+    - host: wallet.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-apigw-app
+                port:
+                  number: 8080
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-apigw-admin
+                port:
+                  number: 8081
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-ws
+                port:
+                  number: 8090
+          - path: /webhook
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-apigw-webhook
+                port:
+                  number: 8082
+          - path: /rpc
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-chain-gateway
+                port:
+                  number: 8545
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-apigw-app
+                port:
+                  number: 8080

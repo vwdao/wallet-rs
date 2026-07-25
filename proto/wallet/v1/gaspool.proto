@@ -1,0 +1,28 @@
+syntax = "proto3";
+package wallet.v1;
+
+service GasPoolService {
+  rpc GetPool(GetPoolRequest) returns (GasPool);
+  rpc Sponsor(SponsorRequest) returns (SponsorResponse);
+}
+
+message GasPool {
+  int64 chain_index = 1;
+  string balance = 2;
+  bool enabled = 3;
+}
+
+message GetPoolRequest {
+  int64 chain_index = 1;
+}
+
+message SponsorRequest {
+  int64 chain_index = 1;
+  string user_address = 2;
+  bytes user_op_or_tx = 3;
+}
+
+message SponsorResponse {
+  string status = 1;
+  string tx_hash = 2;
+}

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wallet-rpc-urls
+  namespace: wallet
+data:
+  ETH_RPC_URL: "https://eth.llamarpc.com"
+  SOL_RPC_URL: "https://api.mainnet-beta.solana.com"
+  BTC_RPC_URL: "https://blockstream.info/api"
+  TRON_RPC_URL: "https://api.trongrid.io"
+  CLICKHOUSE_URL: ""

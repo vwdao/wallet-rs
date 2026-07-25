@@ -1,0 +1,539 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: wallet
+
+resources:
+  - ../../base
+  - pdb.yaml
+  - rpc-config.yaml
+
+patches:
+  # ── Namespace ──
+  - target:
+      kind: Namespace
+      name: wallet
+    patch: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: wallet
+        labels:
+          env: prod
+
+  # ── Secrets (placeholder — MUST be overridden in production) ──
+  - target:
+      kind: Secret
+      name: wallet-secrets
+    patch: |
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: wallet-secrets
+      stringData:
+        POSTGRES_PASSWORD: "CHANGE_ME_PROD_POSTGRES_PASSWORD"
+        JWT_SECRET: "CHANGE_ME_PROD_JWT_SECRET_64_CHARS_MINIMUM"
+        JWT_ISSUER: "viva-wallet"
+        ADMIN_JWT_SECRET: "CHANGE_ME_PROD_ADMIN_JWT_SECRET"
+        ADMIN_JWT_ISSUER: "viva-wallet-admin"
+
+  # ── PostgreSQL (HA) ──
+  - target:
+      kind: Deployment
+      name: postgres
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: postgres
+      spec:
+        replicas: 1
+        strategy:
+          type: Recreate
+        template:
+          spec:
+            containers:
+              - name: postgres
+                env:
+                  - name: POSTGRES_INITDB_ARGS
+                    value: "--data-checksums"
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 1Gi
+                  limits:
+                    cpu: "2"
+                    memory: 4Gi
+  - target:
+      kind: PersistentVolumeClaim
+      name: postgres-pvc
+    patch: |
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: postgres-pvc
+      spec:
+        resources:
+          requests:
+            storage: 50Gi
+
+  # ── Redis ──
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: redis
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: redis
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── NATS ──
+  - target:
+      kind: Deployment
+      name: nats
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: nats
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: nats
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── wallet-api (HA) ──
+  - target:
+      kind: Deployment
+      name: wallet-api
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-api
+      spec:
+        replicas: 3
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 1
+        template:
+          spec:
+            topologySpreadConstraints:
+              - maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: DoNotSchedule
+                labelSelector:
+                  matchLabels:
+                    app: wallet-api
+            containers:
+              - name: wallet-api
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                  - name: ETH_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: ETH_RPC_URL
+                  - name: SOL_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: SOL_RPC_URL
+                  - name: BTC_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: BTC_RPC_URL
+                  - name: TRON_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: TRON_RPC_URL
+                  - name: CLICKHOUSE_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: CLICKHOUSE_URL
+                        optional: true
+                resources:
+                  requests:
+                    cpu: 500m
+                    memory: 512Mi
+                  limits:
+                    cpu: "2"
+                    memory: 1Gi
+
+  # ── apigw-app (HA) ──
+  - target:
+      kind: Deployment
+      name: wallet-apigw-app
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-apigw-app
+      spec:
+        replicas: 3
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 1
+        template:
+          spec:
+            topologySpreadConstraints:
+              - maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: DoNotSchedule
+                labelSelector:
+                  matchLabels:
+                    app: wallet-apigw-app
+            containers:
+              - name: wallet-apigw-app
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── apigw-admin ──
+  - target:
+      kind: Deployment
+      name: wallet-apigw-admin
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-apigw-admin
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: wallet-apigw-admin
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── apigw-webhook ──
+  - target:
+      kind: Deployment
+      name: wallet-apigw-webhook
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-apigw-webhook
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: wallet-apigw-webhook
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── chain-gateway ──
+  - target:
+      kind: Deployment
+      name: wallet-chain-gateway
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-chain-gateway
+      spec:
+        replicas: 2
+        template:
+          spec:
+            containers:
+              - name: wallet-chain-gateway
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── wallet-ws (HA) ──
+  - target:
+      kind: Deployment
+      name: wallet-ws
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-ws
+      spec:
+        replicas: 3
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 1
+            maxSurge: 1
+        template:
+          spec:
+            topologySpreadConstraints:
+              - maxSkew: 1
+                topologyKey: kubernetes.io/hostname
+                whenUnsatisfiable: DoNotSchedule
+                labelSelector:
+                  matchLabels:
+                    app: wallet-ws
+            containers:
+              - name: wallet-ws
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                resources:
+                  requests:
+                    cpu: 100m
+                    memory: 128Mi
+                  limits:
+                    cpu: 500m
+                    memory: 256Mi
+
+  # ── wallet-sync (all chains) ──
+  - target:
+      kind: Deployment
+      name: wallet-sync-eth
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-eth
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                  - name: ETH_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: ETH_RPC_URL
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  - target:
+      kind: Deployment
+      name: wallet-sync-sol
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-sol
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                  - name: SOL_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: SOL_RPC_URL
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  - target:
+      kind: Deployment
+      name: wallet-sync-tron
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-tron
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                  - name: TRON_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: TRON_RPC_URL
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── wallet-jobs ──
+  - target:
+      kind: Deployment
+      name: wallet-jobs
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-jobs
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-jobs
+                env:
+                  - name: RUST_LOG
+                    value: "warn"
+                  - name: ETH_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: ETH_RPC_URL
+                  - name: SOL_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: SOL_RPC_URL
+                  - name: TRON_RPC_URL
+                    valueFrom:
+                      configMapKeyRef:
+                        name: wallet-rpc-urls
+                        key: TRON_RPC_URL
+                resources:
+                  requests:
+                    cpu: 200m
+                    memory: 256Mi
+                  limits:
+                    cpu: "1"
+                    memory: 512Mi
+
+  # ── Ingress with TLS ──
+  - target:
+      kind: Ingress
+      name: wallet-ingress
+    patch: |
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: wallet-ingress
+        annotations:
+          traefik.ingress.kubernetes.io/router.entrypoints: websecure
+          traefik.ingress.kubernetes.io/router.tls: "true"
+          traefik.ingress.kubernetes.io/ssl-redirect: "true"
+      spec:
+        tls:
+          - hosts:
+              - wallet.example.com
+            secretName: wallet-tls
+        rules:
+          - host: wallet.example.com
+            http:
+              paths:
+                - path: /api
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-apigw-app
+                      port:
+                        number: 8080
+                - path: /admin
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-apigw-admin
+                      port:
+                        number: 8081
+                - path: /ws
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-ws
+                      port:
+                        number: 8090
+                - path: /webhook
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-apigw-webhook
+                      port:
+                        number: 8082
+                - path: /rpc
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-chain-gateway
+                      port:
+                        number: 8545
+                - path: /docs
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wallet-apigw-app
+                      port:
+                        number: 8080

@@ -1,0 +1,46 @@
+mod parser;
+mod reporter;
+mod syncer;
+
+use clap::Parser;
+use std::sync::Arc;
+use tracing_subscriber::EnvFilter;
+use wallet_chain::build_registry;
+use wallet_config::{load_yaml, SyncConfig};
+use wallet_db::Db;
+use wallet_events::{MemoryEventBus, NatsEventBus};
+use wallet_types::ChainIndex;
+
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(long, default_value = "configs/wallet-sync.yaml")]
+    config: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
+        .init();
+    let args = Args::parse();
+    let cfg: SyncConfig = load_yaml(&args.config)?;
+    let db = Db::connect(&cfg.database).await?;
+    let _ = db.migrate().await;
+    let registry = build_registry(std::slice::from_ref(&cfg.chain))?;
+    let events = match NatsEventBus::connect(&cfg.nats.url).await {
+        Ok(b) => b as Arc<dyn wallet_events::EventBus>,
+        Err(_) => MemoryEventBus::new(256),
+    };
+    let chain_index = ChainIndex(cfg.chain_index);
+    let handle = registry.get(chain_index)?.clone();
+    syncer::run(syncer::SyncRuntime {
+        db,
+        chain_index,
+        chain: handle,
+        events,
+        poll_interval_ms: cfg.poll_interval_ms,
+        confirmations: cfg.chain.confirmations,
+    })
+    .await?;
+    Ok(())
+}

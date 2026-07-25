@@ -1,0 +1,37 @@
+syntax = "proto3";
+package wallet.v1;
+
+import "wallet/v1/common.proto";
+
+service CmsService {
+  rpc GetAppConfig(GetAppConfigRequest) returns (AppConfig);
+  rpc ListGuides(ListGuidesRequest) returns (ListGuidesResponse);
+}
+
+message AppConfig {
+  string min_version = 1;
+  string latest_version = 2;
+  string force_update_url = 3;
+  string features_json = 4;
+}
+
+message GetAppConfigRequest {
+  string platform = 1;
+  string version = 2;
+}
+
+message Guide {
+  string id = 1;
+  string title = 2;
+  string body = 3;
+}
+
+message ListGuidesRequest {
+  string locale = 1;
+  Pagination pagination = 2;
+}
+
+message ListGuidesResponse {
+  repeated Guide items = 1;
+  PageMeta meta = 2;
+}

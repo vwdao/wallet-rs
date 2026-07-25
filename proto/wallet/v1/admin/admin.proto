@@ -1,0 +1,95 @@
+syntax = "proto3";
+package wallet.v1.admin;
+
+import "wallet/v1/common.proto";
+import "wallet/v1/network.proto";
+import "wallet/v1/token.proto";
+import "wallet/v1/dapp.proto";
+
+service AdminNetworkService {
+  rpc UpsertNetwork(wallet.v1.Network) returns (wallet.v1.Network);
+  rpc ListNetworks(wallet.v1.ListNetworksRequest) returns (wallet.v1.ListNetworksResponse);
+}
+
+service AdminTokenService {
+  rpc UpsertToken(wallet.v1.Token) returns (wallet.v1.Token);
+  rpc ListTokens(wallet.v1.ListTokensRequest) returns (wallet.v1.ListTokensResponse);
+}
+
+service AdminDappService {
+  rpc UpsertDapp(wallet.v1.Dapp) returns (wallet.v1.Dapp);
+  rpc ListDapps(wallet.v1.ListDappsRequest) returns (wallet.v1.ListDappsResponse);
+}
+
+service AdminRpcEndpointService {
+  rpc ListEndpoints(ListEndpointsRequest) returns (ListEndpointsResponse);
+  rpc UpsertEndpoint(RpcEndpoint) returns (RpcEndpoint);
+  rpc DeleteEndpoint(DeleteEndpointRequest) returns (wallet.v1.Empty);
+}
+
+message RpcEndpoint {
+  string id = 1;
+  int64 chain_index = 2;
+  string url = 3;
+  uint32 weight = 4;
+  bool enabled = 5;
+}
+
+message ListEndpointsRequest {
+  int64 chain_index = 1;
+}
+
+message ListEndpointsResponse {
+  repeated RpcEndpoint items = 1;
+}
+
+service AdminUserService {
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse);
+}
+
+message AdminUser {
+  string id = 1;
+  string external_id = 2;
+}
+
+message ListUsersRequest {
+  wallet.v1.Pagination pagination = 1;
+}
+
+message ListUsersResponse {
+  repeated AdminUser items = 1;
+  wallet.v1.PageMeta meta = 2;
+}
+
+service AdminGasPoolService {
+  rpc SetEnabled(SetGasPoolEnabledRequest) returns (wallet.v1.Empty);
+}
+
+message SetGasPoolEnabledRequest {
+  int64 chain_index = 1;
+  bool enabled = 2;
+}
+
+service AdminSwapService {
+  rpc UpsertProvider(SwapProvider) returns (SwapProvider);
+}
+
+message SwapProvider {
+  string name = 1;
+  bool enabled = 2;
+  string config_json = 3;
+}
+
+service AdminTransactionService {
+  rpc Reindex(ReindexRequest) returns (wallet.v1.Empty);
+}
+
+message DeleteEndpointRequest {
+  string id = 1;
+}
+
+message ReindexRequest {
+  int64 chain_index = 1;
+  uint64 from_block = 2;
+  uint64 to_block = 3;
+}
