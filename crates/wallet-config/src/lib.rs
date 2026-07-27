@@ -142,6 +142,26 @@ pub struct ChainGatewayConfig {
     pub listen: String,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
+    #[serde(default = "default_health_check_interval_ms")]
+    pub health_check_interval_ms: u64,
+    #[serde(default = "default_failure_threshold")]
+    pub failure_threshold: u32,
+    #[serde(default)]
+    pub admin_key: Option<String>,
+    #[serde(default = "default_stats_batch_interval_ms")]
+    pub stats_batch_interval_ms: u64,
+}
+
+fn default_health_check_interval_ms() -> u64 {
+    30_000
+}
+
+fn default_failure_threshold() -> u32 {
+    3
+}
+
+fn default_stats_batch_interval_ms() -> u64 {
+    1_000
 }
 
 #[derive(Debug, Clone, Deserialize)]

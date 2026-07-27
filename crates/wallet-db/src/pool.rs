@@ -27,6 +27,8 @@ impl Db {
                 models::AppConfig,
                 models::Guide,
                 models::ChainGatewayKey,
+                models::ChainGatewayStats,
+                models::GatewaySettings,
             ))
             .connect(&cfg.url)
             .await

@@ -65,6 +65,27 @@ pub struct RpcEndpoint {
 
     pub enabled: bool,
 
+    #[default(String::from("free"))]
+    pub tier: String,
+
+    #[default(false)]
+    pub is_archive: bool,
+
+    #[default(0)]
+    pub priority: i32,
+
+    pub last_health_check: Option<jiff::Timestamp>,
+
+    #[default(true)]
+    pub healthy: bool,
+
+    pub avg_latency_ms: Option<i32>,
+
+    pub block_height: Option<i64>,
+
+    #[default(0)]
+    pub error_count: i32,
+
     #[default(jiff::Timestamp::now())]
     pub created_at: jiff::Timestamp,
 }
@@ -227,6 +248,18 @@ pub struct ChainGatewayKey {
     pub rate_limit_per_min: i32,
 
     pub enabled: bool,
+
+    #[default(Vec::<i64>::new())]
+    pub allowed_chains: Vec<i64>,
+
+    #[default(String::from("all"))]
+    pub allowed_tier: String,
+
+    #[default(0i64)]
+    pub total_requests: i64,
+
+    #[default(jiff::Timestamp::now())]
+    pub created_at: jiff::Timestamp,
 }
 
 #[derive(Debug, Clone, toasty::Model)]
@@ -245,4 +278,41 @@ pub struct Dapp {
 
     #[default(jiff::Timestamp::now())]
     pub created_at: jiff::Timestamp,
+}
+
+#[derive(Debug, Clone, toasty::Model)]
+pub struct ChainGatewayStats {
+    #[key]
+    #[auto]
+    pub id: Uuid,
+
+    #[index]
+    pub api_key: String,
+
+    #[index]
+    pub chain_index: i64,
+
+    pub method: Option<String>,
+
+    pub status_code: i32,
+
+    pub latency_ms: i32,
+
+    pub error_msg: Option<String>,
+
+    #[default(jiff::Timestamp::now())]
+    pub created_at: jiff::Timestamp,
+}
+
+#[derive(Debug, Clone, toasty::Model)]
+pub struct GatewaySettings {
+    #[key]
+    pub key: String,
+
+    pub value: String,
+
+    pub description: Option<String>,
+
+    #[default(jiff::Timestamp::now())]
+    pub updated_at: jiff::Timestamp,
 }

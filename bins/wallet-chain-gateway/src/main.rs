@@ -10,34 +10,27 @@ use wallet_config::{load_yaml, ChainGatewayConfig};
 use wallet_db::Db;
 use wallet_error::AppError;
 
-mod state_injector {
-    use super::*;
+mod admin;
+mod health;
+mod router;
+mod settings;
+mod state_injector;
+mod stats;
 
-    pub struct StateInjector<T: Clone + Send + Sync + 'static>(pub T);
+const ADMIN_HTML: &str = include_str!("../static/admin.html");
 
-    #[async_trait]
-    impl<T: Clone + Send + Sync + 'static> Handler for StateInjector<T> {
-        async fn handle(
-            &self,
-            _req: &mut Request,
-            depot: &mut Depot,
-            _res: &mut Response,
-            flow: &mut FlowCtrl,
-        ) {
-            depot.insert_typed(self.0.clone());
-            flow.call_next(_req, depot, _res).await;
-        }
-    }
-}
-
+use settings::SettingsHandle;
 use state_injector::StateInjector;
 
 #[derive(Clone)]
-struct Gw {
-    db: Db,
-    http: reqwest::Client,
-    /// api_key -> timestamps in the last minute
-    rate: Arc<DashMap<String, Vec<Instant>>>,
+pub struct Gw {
+    pub db: Db,
+    pub http: reqwest::Client,
+    pub router: Arc<router::RpcRouter>,
+    pub stats: stats::StatsCollector,
+    pub rate: Arc<DashMap<String, Vec<Instant>>>,
+    pub admin_key: Option<String>,
+    pub settings: SettingsHandle,
 }
 
 #[derive(Parser, Debug)]
@@ -54,15 +47,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let cfg: ChainGatewayConfig = load_yaml(&args.config)?;
     let db = Db::connect(&cfg.database).await?;
+    let http = reqwest::Client::new();
+
+    let (reloader, settings_handle) =
+        settings::SettingsReloader::new(db.clone(), Duration::from_secs(10));
+    let loaded_cfg = reloader.load_now().await?;
+    reloader.spawn();
+
+    let router = router::RpcRouter::new(db.clone(), http.clone(), loaded_cfg.failure_threshold);
+    let router = Arc::new(router);
+
+    let stats_collector = stats::StatsCollector::new(
+        db.clone(),
+        Duration::from_millis(loaded_cfg.stats_batch_interval_ms),
+    );
+
     let state = Gw {
-        db,
-        http: reqwest::Client::new(),
+        db: db.clone(),
+        http: http.clone(),
+        router: router.clone(),
+        stats: stats_collector,
         rate: Arc::new(DashMap::new()),
+        admin_key: cfg.admin_key.clone(),
+        settings: settings_handle.clone(),
     };
+
+    let health_checker = health::HealthChecker::new(
+        db.clone(),
+        http.clone(),
+        Duration::from_millis(loaded_cfg.health_check_interval_ms),
+        loaded_cfg.failure_threshold,
+    );
+    health_checker.spawn();
 
     let app = Router::new()
         .push(Router::with_path("healthz").get(healthz))
+        .push(Router::with_path("readyz").get(readyz))
         .push(Router::with_path("rpc/{chain}").post(proxy_rpc))
+        .push(Router::with_path("admin").get(admin_ui))
+        .push(admin::admin_router())
         .hoop(StateInjector(state));
 
     let addr: SocketAddr = cfg.listen.parse()?;
@@ -85,66 +108,141 @@ async fn healthz(_req: &mut Request, _depot: &mut Depot, res: &mut Response) {
 }
 
 #[handler]
+async fn readyz(_req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result = depot.get_typed::<Gw>();
+    match result {
+        Ok(st) if st.settings.is_ready() => {
+            res.render(Text::Plain("ok"));
+        }
+        _ => {
+            res.status_code(StatusCode::SERVICE_UNAVAILABLE);
+            res.render(Text::Plain("not ready"));
+        }
+    }
+}
+
+#[handler]
+async fn admin_ui(_req: &mut Request, _depot: &mut Depot, res: &mut Response) {
+    let _ = res.add_header("content-type", "text/html; charset=utf-8", true);
+    res.render(ADMIN_HTML);
+}
+
+#[handler]
 async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     let result: Result<Json<Value>, AppError> = async {
-        let st = depot.get_typed::<Gw>().map_err(|_| AppError::internal("Gw state not inserted"))?;
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("Gw state not inserted"))?;
+
+        let cfg = st.settings.get();
 
         let api_key = req
             .headers()
             .get("x-api-key")
             .and_then(|v| v.to_str().ok())
-            .ok_or(AppError::Unauthorized)?;
+            .ok_or(AppError::Unauthorized)?
+            .to_string();
+
+        if cfg.global_rate_limit_per_min > 0 {
+            check_rate(&st.rate, "_global", cfg.global_rate_limit_per_min)?;
+        }
 
         let mut db = st.db.clone_inner();
-        let (limit, enabled) = match wallet_db::ChainGatewayKey::filter_by_api_key(api_key)
+        let mut key_row = wallet_db::ChainGatewayKey::filter_by_api_key(&api_key)
             .get(&mut db)
             .await
-        {
-            Ok(r) => (r.rate_limit_per_min, r.enabled),
-            Err(_) => return Err(AppError::Forbidden),
-        };
-        if !enabled {
+            .map_err(|_| AppError::Forbidden)?;
+
+        if !key_row.enabled {
             return Err(AppError::Forbidden);
         }
-        check_rate(&st.rate, api_key, limit as usize)?;
+
+        check_rate(
+            &st.rate,
+            &api_key,
+            key_row.rate_limit_per_min.max(0) as usize,
+        )?;
 
         let chain: String = req
             .param("chain")
             .ok_or_else(|| AppError::InvalidArgument("missing chain".into()))?;
+
+        let chain_index: i64 = chain
+            .parse()
+            .map_err(|_| AppError::InvalidArgument(format!("invalid chain index: {chain}")))?;
+
+        if !key_row.allowed_chains.is_empty() && !key_row.allowed_chains.contains(&chain_index) {
+            return Err(AppError::Forbidden);
+        }
+
         let body: Value = req
             .parse_json()
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
-        let chain_index: i64 = chain.parse().unwrap_or(60);
-        let endpoints: Vec<wallet_db::RpcEndpoint> =
-            wallet_db::RpcEndpoint::filter(
-                wallet_db::RpcEndpoint::fields()
-                    .chain_index()
-                    .eq(chain_index)
-                    .and(wallet_db::RpcEndpoint::fields().enabled().eq(true)),
+        if cfg.log_requests {
+            tracing::info!(
+                api_key = %api_key,
+                chain = chain_index,
+                method = body.get("method").and_then(|v| v.as_str()).unwrap_or("unknown"),
+                "proxy request"
+            );
+        }
+
+        // Keep the aggregate counter best-effort so a database hiccup does not
+        // turn an otherwise successful RPC request into a gateway error.
+        let next_total_requests = key_row.total_requests.saturating_add(1);
+        let mut counter_db = st.db.clone_inner();
+        let _ = key_row
+            .update()
+            .total_requests(next_total_requests)
+            .exec(&mut counter_db)
+            .await;
+
+        let start = Instant::now();
+        let timeout = Duration::from_secs(cfg.rpc_timeout_secs);
+        let rpc_result = st
+            .router
+            .execute_rpc(
+                chain_index,
+                &body,
+                &key_row.allowed_tier,
+                timeout,
+                cfg.max_retries,
+                cfg.max_block_lag,
             )
-            .limit(1)
-            .exec(&mut db)
-            .await
-            .map_err(|e| AppError::internal(e.to_string()))?;
+            .await;
+        let latency = start.elapsed().as_millis() as i32;
 
-        let Some(ep) = endpoints.into_iter().next() else {
-            return Err(AppError::NotFound(format!("rpc for chain {chain}")));
-        };
-        let url = ep.url;
+        let method = body
+            .get("method")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
-        let resp = st
-            .http
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| AppError::Unavailable(e.to_string()))?;
-        let v: Value = resp
-            .json()
-            .await
-            .map_err(|e| AppError::Unavailable(e.to_string()))?;
+        match &rpc_result {
+            Ok(_) => {
+                st.stats.record(stats::StatsEvent {
+                    api_key: api_key.clone(),
+                    chain_index,
+                    method,
+                    status_code: 200,
+                    latency_ms: latency,
+                    error_msg: None,
+                });
+            }
+            Err(e) => {
+                st.stats.record(stats::StatsEvent {
+                    api_key: api_key.clone(),
+                    chain_index,
+                    method,
+                    status_code: 503,
+                    latency_ms: latency,
+                    error_msg: Some(e.to_string()),
+                });
+            }
+        }
+
+        let v = rpc_result?;
         Ok(Json(v))
     }
     .await;
@@ -159,16 +257,22 @@ fn check_rate(
     key: &str,
     limit: usize,
 ) -> Result<(), AppError> {
+    if limit == 0 {
+        return Ok(());
+    }
     let now = Instant::now();
     let mut entry = map.entry(key.to_string()).or_default();
     entry.retain(|t| now.duration_since(*t) < Duration::from_secs(60));
     if entry.len() >= limit {
-        return Err(AppError::Unavailable("rate limit".into()));
+        return Err(AppError::TooManyRequests);
     }
     entry.push(now);
-    // Evict stale keys (entries with no recent requests) periodically
     if map.len() > 1000 {
-        map.retain(|_, v| !v.is_empty() && v.iter().any(|t| now.duration_since(*t) < Duration::from_secs(120)));
+        map.retain(|_, v| {
+            !v.is_empty()
+                && v.iter()
+                    .any(|t| now.duration_since(*t) < Duration::from_secs(120))
+        });
     }
     Ok(())
 }

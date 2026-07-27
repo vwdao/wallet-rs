@@ -15,3 +15,5 @@ pub type TokenRow = Token;
 pub type TxRow = Tx;
 pub type DappRow = Dapp;
 pub type GasPoolRow = GasPool;
+pub type ChainGatewayStatsRow = ChainGatewayStats;
+pub type GatewaySettingsRow = GatewaySettings;

@@ -227,6 +227,13 @@ impl AdminRpcEndpointService for AdminRpcSvc {
             url: e.url.clone(),
             weight: e.weight as i32,
             enabled: e.enabled,
+            tier: String::from("free"),
+            is_archive: false,
+            priority: 0,
+            last_health_check: None,
+            healthy: true,
+            avg_latency_ms: None,
+            error_count: 0,
             created_at: jiff::Timestamp::now(),
         };
         let saved = NetworkRepo::new(&self.0.db).upsert_endpoint(&row).await?;

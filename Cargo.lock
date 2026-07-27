@@ -6222,6 +6222,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dashmap",
+ "jiff",
+ "parking_lot",
+ "rand 0.8.7",
  "reqwest 0.12.28",
  "salvo",
  "serde",
@@ -6230,6 +6233,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "wallet-config",
  "wallet-db",
  "wallet-error",

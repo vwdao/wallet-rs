@@ -21,3 +21,7 @@ tracing-subscriber = { workspace = true }
 reqwest = { workspace = true }
 dashmap = { workspace = true }
 toasty = { workspace = true }
+uuid = { workspace = true }
+rand = { workspace = true }
+jiff = { workspace = true }
+parking_lot = { workspace = true }

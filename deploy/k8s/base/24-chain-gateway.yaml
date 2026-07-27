@@ -10,6 +10,9 @@ data:
       url: "postgres://wallet:${POSTGRES_PASSWORD}@postgres:5432/wallet"
     redis:
       url: "redis://redis:6379"
+    health_check_interval_ms: 30000
+    failure_threshold: 3
+    admin_key: "${CHAIN_GW_ADMIN_KEY}"
   start.sh: |
     #!/bin/sh
     envsubst < /etc/wallet-template/chain-gateway.yaml.tmpl > /tmp/cfg.yaml
@@ -24,16 +27,22 @@ metadata:
     app: wallet-chain-gateway
     tier: backend
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: wallet-chain-gateway
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   template:
     metadata:
       labels:
         app: wallet-chain-gateway
         tier: backend
     spec:
+      terminationGracePeriodSeconds: 35
       containers:
         - name: wallet-chain-gateway
           image: wallet:latest
@@ -50,6 +59,33 @@ spec:
                 secretKeyRef:
                   name: wallet-secrets
                   key: POSTGRES_PASSWORD
+            - name: CHAIN_GW_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: CHAIN_GW_ADMIN_KEY
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8545
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8545
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8545
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            failureThreshold: 30
           volumeMounts:
             - name: config-template
               mountPath: /etc/wallet-template
@@ -60,12 +96,6 @@ spec:
             - name: config
               mountPath: /tmp/cfg.yaml
               subPath: cfg.yaml
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8545
-            initialDelaySeconds: 5
-            periodSeconds: 5
           resources:
             requests:
               cpu: 100m

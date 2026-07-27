@@ -1,3 +1,13 @@
+# ── Stage 0: Build the Vue admin console ───────────────────────────────
+FROM node:22-alpine AS admin-ui-builder
+
+WORKDIR /app
+COPY bins/wallet-chain-gateway/admin-ui/package*.json bins/wallet-chain-gateway/admin-ui/
+RUN cd bins/wallet-chain-gateway/admin-ui && npm ci
+COPY bins/wallet-chain-gateway/admin-ui/next.config.mjs bins/wallet-chain-gateway/admin-ui/
+COPY bins/wallet-chain-gateway/admin-ui/app bins/wallet-chain-gateway/admin-ui/app
+RUN cd bins/wallet-chain-gateway/admin-ui && npm run build
+
 # ── Stage 1: Build ──────────────────────────────────────────────────────
 FROM rust:1.83-bookworm AS builder
 
@@ -42,6 +52,11 @@ RUN rm -rf crates/*/src bins/*/src
 COPY proto proto
 COPY crates crates
 COPY bins bins
+
+# The gateway embeds the generated Vue entrypoint at compile time.
+RUN rm -rf bins/wallet-chain-gateway/static && mkdir -p bins/wallet-chain-gateway/static
+COPY --from=admin-ui-builder /app/bins/wallet-chain-gateway/admin-ui/out/ bins/wallet-chain-gateway/static/
+RUN cp bins/wallet-chain-gateway/static/index.html bins/wallet-chain-gateway/static/admin.html
 
 # Touch to invalidate cache for actual source
 RUN find crates bins -name "*.rs" -exec touch {} +

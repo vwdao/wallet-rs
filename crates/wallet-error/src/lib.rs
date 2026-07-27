@@ -13,6 +13,8 @@ pub enum AppError {
     Unauthorized,
     #[error("forbidden")]
     Forbidden,
+    #[error("too many requests")]
+    TooManyRequests,
     #[error("invalid argument: {0}")]
     InvalidArgument(String),
     #[error("chain not supported: {0}")]
@@ -45,6 +47,7 @@ impl AppError {
             Self::NotFound(_) => "not_found",
             Self::Unauthorized => "unauthorized",
             Self::Forbidden => "forbidden",
+            Self::TooManyRequests => "too_many_requests",
             Self::InvalidArgument(_) => "invalid_argument",
             Self::ChainNotSupported(_) => "chain_not_supported",
             Self::Unavailable(_) => "unavailable",
@@ -58,6 +61,7 @@ impl AppError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::InvalidArgument(_) | Self::ChainNotSupported(_) => StatusCode::BAD_REQUEST,
             Self::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Unimplemented(_) => StatusCode::NOT_IMPLEMENTED,
@@ -84,6 +88,7 @@ impl From<AppError> for tonic::Status {
             AppError::NotFound(_) => tonic::Code::NotFound,
             AppError::Unauthorized => tonic::Code::Unauthenticated,
             AppError::Forbidden => tonic::Code::PermissionDenied,
+            AppError::TooManyRequests => tonic::Code::ResourceExhausted,
             AppError::InvalidArgument(_) | AppError::ChainNotSupported(_) => {
                 tonic::Code::InvalidArgument
             }
@@ -120,33 +125,33 @@ pub struct ErrorResponse {
 }
 
 impl salvo::oapi::EndpointOutRegister for AppError {
-    fn register(
-        components: &mut salvo::oapi::Components,
-        operation: &mut salvo::oapi::Operation,
-    ) {
+    fn register(components: &mut salvo::oapi::Components, operation: &mut salvo::oapi::Operation) {
         use salvo::oapi::{Response, ToSchema};
         let schema = <ErrorResponse as ToSchema>::to_schema(components);
         operation.responses.insert(
             "400",
-            Response::new("Bad request")
-                .add_content("application/json", schema.clone()),
+            Response::new("Bad request").add_content("application/json", schema.clone()),
         );
-        operation.responses.insert("401", Response::new("Unauthorized"));
-        operation.responses.insert("403", Response::new("Forbidden"));
+        operation
+            .responses
+            .insert("401", Response::new("Unauthorized"));
+        operation
+            .responses
+            .insert("403", Response::new("Forbidden"));
+        operation
+            .responses
+            .insert("429", Response::new("Too many requests"));
         operation.responses.insert(
             "404",
-            Response::new("Not found")
-                .add_content("application/json", schema.clone()),
+            Response::new("Not found").add_content("application/json", schema.clone()),
         );
         operation.responses.insert(
             "500",
-            Response::new("Internal error")
-                .add_content("application/json", schema.clone()),
+            Response::new("Internal error").add_content("application/json", schema.clone()),
         );
         operation.responses.insert(
             "503",
-            Response::new("Service unavailable")
-                .add_content("application/json", schema),
+            Response::new("Service unavailable").add_content("application/json", schema),
         );
     }
 }
