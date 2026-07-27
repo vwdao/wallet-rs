@@ -62,7 +62,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddr = cfg.listen.parse()?;
     tracing::info!("wallet-ws on {addr}");
     let listener = TcpListener::new(addr.to_string()).bind().await;
-    Server::new(listener).serve(app).await;
+    let server = Server::new(listener);
+    let handle = server.handle();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        tracing::info!("shutting down wallet-ws...");
+        handle.stop_graceful(Some(std::time::Duration::from_secs(10)));
+    });
+    server.serve(app).await;
     Ok(())
 }
 

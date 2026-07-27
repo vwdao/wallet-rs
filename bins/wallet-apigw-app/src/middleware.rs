@@ -50,9 +50,14 @@ pub async fn require_app_jwt(
         }
     };
 
-    let st = depot
-        .get_typed::<Arc<GwState>>()
-        .expect("GwState not inserted");
+    let st = match depot.get_typed::<Arc<GwState>>() {
+        Ok(s) => s.clone(),
+        Err(_) => {
+            res.render(AppError::internal("state not initialized"));
+            flow.skip_rest();
+            return;
+        }
+    };
 
     if verify_jwt(token, &st.cfg.jwt.secret, &st.cfg.jwt.issuer).is_err() {
         res.render(AppError::Unauthorized);

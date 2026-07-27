@@ -2,6 +2,7 @@ pub mod cms;
 pub mod dapp;
 pub mod gaspool;
 pub mod market;
+pub mod metrics;
 pub mod network;
 pub mod rent;
 pub mod swap;
@@ -14,6 +15,8 @@ use wallet_chain::ChainRegistry;
 use wallet_db::{clickhouse::ClickHouseDb, Db};
 use wallet_events::EventBus;
 
+pub use metrics::Metrics;
+
 #[derive(Clone)]
 pub struct AppState {
     pub db: Db,
@@ -21,6 +24,7 @@ pub struct AppState {
     pub events: Arc<dyn EventBus>,
     pub clickhouse: Option<ClickHouseDb>,
     pub http: reqwest::Client,
+    pub metrics: Metrics,
 }
 
 impl AppState {
@@ -36,6 +40,7 @@ impl AppState {
             events,
             clickhouse,
             http: reqwest::Client::new(),
+            metrics: Metrics::new(),
         }
     }
 }

@@ -19,10 +19,13 @@ pub async fn ws_upgrade(
     depot: &mut Depot,
     res: &mut Response,
 ) -> Result<(), StatusError> {
-    let hub = depot
-        .get_typed::<Arc<Hub>>()
-        .expect("Hub not inserted")
-        .clone();
+    let hub = match depot.get_typed::<Arc<Hub>>() {
+        Ok(h) => h.clone(),
+        Err(_) => {
+            tracing::error!("Hub not inserted in depot");
+            return Err(StatusError::internal_server_error());
+        }
+    };
     WebSocketUpgrade::new()
         .upgrade(req, res, move |ws| handle(ws, hub))
         .await
@@ -32,6 +35,7 @@ async fn handle(ws: WebSocket, hub: Arc<Hub>) {
     let (mut sender, mut receiver) = ws.split();
 
     let (tx_cmd, mut rx_cmd) = mpsc::unbounded_channel::<String>();
+    let (tx_pong, mut rx_pong) = mpsc::unbounded_channel::<()>();
 
     let mut topic_rx = hub.subscribe("wallet.tx.indexed");
 
@@ -42,14 +46,16 @@ async fn handle(ws: WebSocket, hub: Arc<Hub>) {
                 Some(topic) = rx_cmd.recv() => {
                     topic_rx = hub.subscribe(&topic);
                 }
+                Some(()) = rx_pong.recv() => {
+                    if sender.send(Message::text(r#"{"op":"pong"}"#.to_string())).await.is_err() {
+                        break;
+                    }
+                }
                 msg = topic_rx.recv() => {
-                    match msg {
-                        Ok(payload) => {
-                            if sender.send(Message::text(payload.to_string())).await.is_err() {
-                                break;
-                            }
+                    if let Ok(payload) = msg {
+                        if sender.send(Message::text(payload.to_string())).await.is_err() {
+                            break;
                         }
-                        Err(_) => {}
                     }
                 }
             }
@@ -65,14 +71,16 @@ async fn handle(ws: WebSocket, hub: Arc<Hub>) {
                 Ok(s) => s,
                 Err(_) => continue,
             };
-            if let Ok(msg) = serde_json::from_str::<ClientMsg>(text_str) {
-                match msg.op.as_str() {
+            if let Ok(client_msg) = serde_json::from_str::<ClientMsg>(text_str) {
+                match client_msg.op.as_str() {
                     "subscribe" => {
-                        if let Some(topic) = msg.topic {
+                        if let Some(topic) = client_msg.topic {
                             let _ = tx_cmd.send(topic);
                         }
                     }
-                    "ping" => {}
+                    "ping" => {
+                        let _ = tx_pong.send(());
+                    }
                     _ => {}
                 }
             }

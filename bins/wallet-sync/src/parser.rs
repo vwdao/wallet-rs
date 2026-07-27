@@ -28,7 +28,9 @@ fn normalize_tx(
         Some(ChainFamily::Bitcoin) => normalize_utxo_tx(height, idx, &mut tx),
         Some(ChainFamily::Tron) => normalize_tron_tx(height, idx, &mut tx),
         Some(ChainFamily::UtxoOther) => normalize_utxo_tx(height, idx, &mut tx),
-        None => {}
+        None => {
+            tracing::warn!(chain_index = chain_index.as_i64(), "unknown chain family, skipping normalization");
+        }
     }
     tx
 }

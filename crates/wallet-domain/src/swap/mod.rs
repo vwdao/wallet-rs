@@ -548,6 +548,7 @@ impl<'a> SwapService<'a> {
             .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn build(
         &self,
         chain_index: ChainIndex,

@@ -307,6 +307,20 @@ pub struct UserInfo {
     pub created_at_unix: i64,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AddressInfo {
+    /// Wallet address
+    pub address: String,
+    /// Chain index
+    pub chain_index: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListAddressesResponse {
+    /// List of wallet addresses
+    pub items: Vec<AddressInfo>,
+}
+
 // ─────────────────────── Proto conversions ───────────────────────
 
 impl From<wallet_proto::wallet::v1::Network> for NetworkInfo {
@@ -443,4 +457,33 @@ impl From<wallet_proto::wallet::v1::User> for UserInfo {
             created_at_unix: u.created_at_unix,
         }
     }
+}
+
+impl From<wallet_proto::wallet::v1::AddressInfo> for AddressInfo {
+    fn from(a: wallet_proto::wallet::v1::AddressInfo) -> Self {
+        Self {
+            address: a.address,
+            chain_index: a.chain_index,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct MetricsResponse {
+    /// Total requests processed
+    pub requests_total: u64,
+    /// Successful requests
+    pub requests_success: u64,
+    /// Failed requests
+    pub requests_error: u64,
+    /// Total DB queries
+    pub db_queries_total: u64,
+    /// Failed DB queries
+    pub db_queries_error: u64,
+    /// Total RPC calls
+    pub rpc_calls_total: u64,
+    /// Failed RPC calls
+    pub rpc_calls_error: u64,
+    /// Events published
+    pub events_published: u64,
 }

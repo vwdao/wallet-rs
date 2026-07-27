@@ -104,6 +104,8 @@ pub struct GatewayConfig {
     pub listen: String,
     pub grpc_endpoint: String,
     pub jwt: JwtConfig,
+    #[serde(default)]
+    pub allowed_origins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

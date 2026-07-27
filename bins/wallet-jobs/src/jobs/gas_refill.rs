@@ -32,7 +32,7 @@ fn threshold_for_chain(chain_index: ChainIndex) -> (rust_decimal::Decimal, rust_
             rust_decimal::Decimal::from_str_radix("500000000", 10).unwrap(),
         ),
         // BTC: no gas refill concept
-        _ => return (rust_decimal::Decimal::ZERO, rust_decimal::Decimal::ZERO),
+        _ => (rust_decimal::Decimal::ZERO, rust_decimal::Decimal::ZERO),
     }
 }
 
@@ -67,7 +67,7 @@ async fn tick(state: &AppState) -> wallet_error::AppResult<()> {
 
         match gas_repo.get(chain_index).await {
             Ok(Some(pool)) if pool.enabled => {
-                let balance = pool.balance.clone();
+                let balance = pool.balance;
 
                 if balance < threshold {
                     tracing::info!(
@@ -78,7 +78,7 @@ async fn tick(state: &AppState) -> wallet_error::AppResult<()> {
                     );
 
                     // Calculate refill amount
-                    let refill_amount = target - &balance;
+                    let refill_amount = target - balance;
                     if refill_amount <= rust_decimal::Decimal::ZERO {
                         continue;
                     }
@@ -96,7 +96,7 @@ async fn tick(state: &AppState) -> wallet_error::AppResult<()> {
                             );
 
                             // Update pool balance in DB
-                            let new_balance = &balance + &refill_amount;
+                            let new_balance = balance + refill_amount;
                             if let Err(e) = gas_repo.update_balance(chain_index, &new_balance).await {
                                 tracing::warn!(error = %e, "gas pool balance update failed");
                             }

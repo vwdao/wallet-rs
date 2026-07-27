@@ -9,10 +9,11 @@ service CmsService {
 }
 
 message AppConfig {
-  string min_version = 1;
-  string latest_version = 2;
-  string force_update_url = 3;
-  string features_json = 4;
+  string platform = 1;
+  string min_version = 2;
+  string latest_version = 3;
+  string force_update_url = 4;
+  string features_json = 5;
 }
 
 message GetAppConfigRequest {
@@ -24,6 +25,7 @@ message Guide {
   string id = 1;
   string title = 2;
   string body = 3;
+  string locale = 4;
 }
 
 message ListGuidesRequest {

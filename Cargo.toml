@@ -13,7 +13,6 @@ members = [
     "bins/wallet-api",
     "bins/wallet-apigw-app",
     "bins/wallet-apigw-admin",
-    "bins/wallet-apigw-webhook",
     "bins/wallet-sync",
     "bins/wallet-jobs",
     "bins/wallet-ws",

@@ -23,6 +23,12 @@ pub struct RentService {
     pub http: reqwest::Client,
 }
 
+impl Default for RentService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RentService {
     pub fn new() -> Self {
         Self {

@@ -178,19 +178,3 @@ impl FromStr for ChainIndex {
             .map_err(|_| ParseError::ChainIndex(s.to_string()))
     }
 }
-
-/// EVM numeric chain id (EIP-155), when applicable.
-pub fn evm_chain_id(index: ChainIndex) -> Option<u64> {
-    match index {
-        ChainIndex::ETH => Some(1),
-        ChainIndex::BSC => Some(56),
-        ChainIndex::POL => Some(137),
-        ChainIndex::ARB => Some(42161),
-        ChainIndex::OP => Some(10),
-        ChainIndex::BASE => Some(8453),
-        ChainIndex::AVAX => Some(43114),
-        ChainIndex::HYPERLIQUID => Some(999),
-        ChainIndex::ROBINHOOD => Some(4663),
-        _ => None,
-    }
-}

@@ -3,6 +3,7 @@ use tonic::{Request, Response, Status};
 use uuid::Uuid;
 use wallet_db::{DappRow, NetworkRepo, NetworkRow, TokenRow, UserRepo};
 use wallet_domain::AppState;
+use wallet_proto::wallet::v1::admin::admin_cms_service_server::AdminCmsService;
 use wallet_proto::wallet::v1::admin::admin_dapp_service_server::AdminDappService;
 use wallet_proto::wallet::v1::admin::admin_gas_pool_service_server::AdminGasPoolService;
 use wallet_proto::wallet::v1::admin::admin_network_service_server::AdminNetworkService;
@@ -13,8 +14,9 @@ use wallet_proto::wallet::v1::admin::admin_transaction_service_server::AdminTran
 use wallet_proto::wallet::v1::admin::admin_user_service_server::AdminUserService;
 use wallet_proto::wallet::v1::admin::*;
 use wallet_proto::wallet::v1::{
-    Dapp, Empty, ListDappsRequest, ListDappsResponse, ListNetworksRequest, ListNetworksResponse,
-    ListTokensRequest, ListTokensResponse, Network, PageMeta, Token,
+    AppConfig, Dapp, Empty, GetAppConfigRequest, Guide, ListDappsRequest,
+    ListDappsResponse, ListGuidesRequest, ListGuidesResponse, ListNetworksRequest,
+    ListNetworksResponse, ListTokensRequest, ListTokensResponse, Network, PageMeta, Token,
 };
 use wallet_types::ChainIndex;
 
@@ -28,6 +30,7 @@ pub struct AdminRpcSvc(pub Arc<AppState>);
 pub struct AdminGasSvc(pub Arc<AppState>);
 pub struct AdminSwapSvc(pub Arc<AppState>);
 pub struct AdminTxSvc(pub Arc<AppState>);
+pub struct AdminCmsSvc(pub Arc<AppState>);
 
 #[tonic::async_trait]
 impl AdminUserService for AdminUserSvc {
@@ -40,7 +43,7 @@ impl AdminUserService for AdminUserSvc {
             page_size: 20,
         });
         let page = p.page.max(1);
-        let page_size = p.page_size.max(1).min(100);
+        let page_size = p.page_size.clamp(1, 100);
         let (rows, total) = UserRepo::new(&self.0.db)
             .list_users(page_size as i64, ((page - 1) * page_size) as i64)
             .await?;
@@ -319,5 +322,154 @@ impl AdminTransactionService for AdminTxSvc {
             .await
             .map_err(|e| Status::internal(format!("publish reindex event: {e}")))?;
         Ok(Response::new(Empty {}))
+    }
+}
+
+#[tonic::async_trait]
+impl AdminCmsService for AdminCmsSvc {
+    async fn upsert_app_config(
+        &self,
+        req: Request<AppConfig>,
+    ) -> Result<Response<AppConfig>, Status> {
+        let cfg = req.into_inner();
+        let mut db = self.0.db.clone_inner();
+        toasty::sql::statement(
+            r#"
+            INSERT INTO app_configs (platform, min_version, latest_version, force_update_url, features_json)
+            VALUES ($1, $2, $3, $4, $5::jsonb)
+            ON CONFLICT (platform) DO UPDATE
+            SET min_version = EXCLUDED.min_version,
+                latest_version = EXCLUDED.latest_version,
+                force_update_url = EXCLUDED.force_update_url,
+                features_json = EXCLUDED.features_json
+            "#,
+        )
+        .bind(&cfg.platform)
+        .bind(&cfg.min_version)
+        .bind(&cfg.latest_version)
+        .bind(&cfg.force_update_url)
+        .bind(&cfg.features_json)
+        .exec(&mut db)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(Response::new(cfg))
+    }
+
+    async fn get_app_config(
+        &self,
+        req: Request<GetAppConfigRequest>,
+    ) -> Result<Response<AppConfig>, Status> {
+        let platform = req.into_inner().platform;
+        let mut db = self.0.db.clone_inner();
+        let rows: Vec<wallet_db::AppConfig> = wallet_db::AppConfig::filter(
+            wallet_db::AppConfig::fields().platform().eq(&platform),
+        )
+        .exec(&mut db)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+
+        let row = rows
+            .into_iter()
+            .next()
+            .ok_or_else(|| Status::not_found("app config not found"))?;
+
+        Ok(Response::new(AppConfig {
+            platform: row.platform,
+            min_version: row.min_version,
+            latest_version: row.latest_version,
+            force_update_url: row.force_update_url.unwrap_or_default(),
+            features_json: row.features_json,
+        }))
+    }
+
+    async fn upsert_guide(&self, req: Request<Guide>) -> Result<Response<Guide>, Status> {
+        let g = req.into_inner();
+        let id = Uuid::parse_str(&g.id).unwrap_or_else(|_| Uuid::new_v4());
+        let mut db = self.0.db.clone_inner();
+        toasty::sql::statement(
+            r#"
+            INSERT INTO guides (id, locale, title, body)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO UPDATE SET locale = EXCLUDED.locale, title = EXCLUDED.title, body = EXCLUDED.body
+            "#,
+        )
+        .bind(id)
+        .bind(&g.locale)
+        .bind(&g.title)
+        .bind(&g.body)
+        .exec(&mut db)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(Response::new(Guide {
+            id: id.to_string(),
+            title: g.title,
+            body: g.body,
+            locale: g.locale,
+        }))
+    }
+
+    async fn delete_guide(
+        &self,
+        req: Request<DeleteGuideRequest>,
+    ) -> Result<Response<Empty>, Status> {
+        let r = req.into_inner();
+        let id = Uuid::parse_str(&r.id)
+            .map_err(|e| Status::invalid_argument(format!("invalid guide id: {e}")))?;
+        let mut db = self.0.db.clone_inner();
+        toasty::sql::statement("DELETE FROM guides WHERE id = $1")
+            .bind(id)
+            .exec(&mut db)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        Ok(Response::new(Empty {}))
+    }
+
+    async fn list_guides(
+        &self,
+        req: Request<ListGuidesRequest>,
+    ) -> Result<Response<ListGuidesResponse>, Status> {
+        let r = req.into_inner();
+        let locale = r.locale;
+        let p = r.pagination.unwrap_or(wallet_proto::wallet::v1::Pagination {
+            page: 1,
+            page_size: 20,
+        });
+        let page = p.page.max(1);
+        let page_size = p.page_size.clamp(1, 100);
+        let limit = page_size as usize;
+        let offset = ((page - 1) * page_size) as usize;
+
+        let mut db = self.0.db.clone_inner();
+        let rows: Vec<wallet_db::Guide> = wallet_db::Guide::filter(
+            wallet_db::Guide::fields().locale().eq(&locale),
+        )
+        .limit(limit)
+        .offset(offset)
+        .exec(&mut db)
+        .await
+        .map_err(|e| Status::internal(e.to_string()))?;
+
+        let total: u64 = wallet_db::Guide::filter(wallet_db::Guide::fields().locale().eq(&locale))
+            .count()
+            .exec(&mut db)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(ListGuidesResponse {
+            items: rows
+                .into_iter()
+                .map(|g| Guide {
+                    id: g.id.to_string(),
+                    title: g.title,
+                    body: g.body,
+                    locale: g.locale,
+                })
+                .collect(),
+            meta: Some(PageMeta {
+                page,
+                page_size,
+                total: total as u64,
+            }),
+        }))
     }
 }

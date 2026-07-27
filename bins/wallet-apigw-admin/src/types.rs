@@ -91,6 +91,32 @@ pub struct ReindexBody {
     pub to_block: u64,
 }
 
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AppConfigBody {
+    /// Platform identifier (e.g. "ios", "android", "web")
+    pub platform: String,
+    /// Minimum supported app version
+    pub min_version: String,
+    /// Latest app version
+    pub latest_version: String,
+    /// URL for forced updates
+    pub force_update_url: String,
+    /// Feature flags as JSON
+    pub features_json: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct GuideBody {
+    /// Guide identifier (empty to auto-generate)
+    pub id: String,
+    /// Locale code (e.g. "en", "zh")
+    pub locale: String,
+    /// Guide title
+    pub title: String,
+    /// Guide body content
+    pub body: String,
+}
+
 // ─────────────────────── Response types ───────────────────────
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -219,6 +245,40 @@ pub struct DeletedResponse {
     pub deleted: bool,
 }
 
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AppConfigInfo {
+    /// Platform identifier
+    pub platform: String,
+    /// Minimum supported version
+    pub min_version: String,
+    /// Latest version
+    pub latest_version: String,
+    /// Forced update URL
+    pub force_update_url: String,
+    /// Feature flags JSON
+    pub features_json: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GuideInfo {
+    /// Guide identifier
+    pub id: String,
+    /// Locale code
+    pub locale: String,
+    /// Guide title
+    pub title: String,
+    /// Guide body
+    pub body: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListGuidesResponse {
+    /// List of guides
+    pub items: Vec<GuideInfo>,
+    /// Pagination metadata
+    pub meta: PageMeta,
+}
+
 // ─────────────────────── Proto conversions ───────────────────────
 
 impl From<wallet_proto::wallet::v1::Network> for NetworkInfo {
@@ -286,6 +346,29 @@ impl From<wallet_proto::wallet::v1::admin::AdminUser> for AdminUserInfo {
         Self {
             id: u.id,
             external_id: u.external_id,
+        }
+    }
+}
+
+impl From<wallet_proto::wallet::v1::AppConfig> for AppConfigInfo {
+    fn from(c: wallet_proto::wallet::v1::AppConfig) -> Self {
+        Self {
+            platform: c.platform,
+            min_version: c.min_version,
+            latest_version: c.latest_version,
+            force_update_url: c.force_update_url,
+            features_json: c.features_json,
+        }
+    }
+}
+
+impl From<wallet_proto::wallet::v1::Guide> for GuideInfo {
+    fn from(g: wallet_proto::wallet::v1::Guide) -> Self {
+        Self {
+            id: g.id,
+            locale: g.locale,
+            title: g.title,
+            body: g.body,
         }
     }
 }

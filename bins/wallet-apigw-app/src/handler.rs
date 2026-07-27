@@ -4,9 +4,9 @@ use std::sync::Arc;
 use wallet_error::AppError;
 use wallet_proto::wallet::v1::{
     BroadcastRequest, EstimateEnergyRequest, EstimateGasRequest, GetAppConfigRequest,
-    GetBalancesRequest, GetKlinesRequest, GetPriceRequest, GetPoolRequest, ListDappsRequest,
-    ListGuidesRequest, ListNetworksRequest, ListTokensRequest, ListTransactionsRequest,
-    Pagination, QuoteRequest, RegisterRequest, SponsorRequest,
+    GetBalancesRequest, GetKlinesRequest, GetPriceRequest, GetPoolRequest, ListAddressesRequest,
+    ListDappsRequest, ListGuidesRequest, ListNetworksRequest, ListTokensRequest,
+    ListTransactionsRequest, Pagination, QuoteRequest, RegisterRequest, SponsorRequest,
 };
 
 use crate::GwState;
@@ -14,7 +14,14 @@ use crate::types::*;
 
 type ApiResult<T> = Result<T, AppError>;
 
-#[endpoint]
+fn require_state(depot: &mut Depot) -> Result<Arc<GwState>, AppError> {
+    depot
+        .get_typed::<Arc<GwState>>()
+        .cloned()
+        .map_err(|_| AppError::internal("state not initialized"))
+}
+
+#[handler]
 pub async fn healthz(_req: &mut Request, _depot: &mut Depot, res: &mut Response) {
     res.render(Text::Plain("ok"));
 }
@@ -22,7 +29,7 @@ pub async fn healthz(_req: &mut Request, _depot: &mut Depot, res: &mut Response)
 /// List supported blockchain networks
 #[endpoint]
 pub async fn list_networks(depot: &mut Depot) -> ApiResult<Json<ListNetworksResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.network.clone();
     let resp = c
         .list_networks(ListNetworksRequest { enabled_only: true })
@@ -42,7 +49,7 @@ pub async fn list_tokens(
     page: QueryParam<u32, false>,
     page_size: QueryParam<u32, false>,
 ) -> ApiResult<Json<ListTokensResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.token.clone();
     let resp = c
         .list_tokens(ListTokensRequest {
@@ -73,7 +80,7 @@ pub async fn get_balances(
     wallet: QueryParam<String, false>,
     tokens: QueryParam<String, false>,
 ) -> ApiResult<Json<GetBalancesResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let token_list = tokens
         .into_inner()
         .unwrap_or_default()
@@ -105,7 +112,7 @@ pub async fn list_txs(
     page: QueryParam<u32, false>,
     page_size: QueryParam<u32, false>,
 ) -> ApiResult<Json<ListTransactionsResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.tx.clone();
     let resp = c
         .list_transactions(ListTransactionsRequest {
@@ -135,7 +142,7 @@ pub async fn broadcast(
     depot: &mut Depot,
     body: JsonBody<BroadcastBody>,
 ) -> ApiResult<Json<BroadcastResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let body = body.into_inner();
     let raw = hex::decode(body.raw_tx_hex.trim_start_matches("0x"))
         .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
@@ -157,7 +164,7 @@ pub async fn swap_quote(
     depot: &mut Depot,
     body: JsonBody<QuoteBody>,
 ) -> ApiResult<Json<QuoteResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let body = body.into_inner();
     let mut c = st.swap.clone();
     let resp = c
@@ -184,7 +191,7 @@ pub async fn price(
     depot: &mut Depot,
     symbol: QueryParam<String, false>,
 ) -> ApiResult<Json<PriceInfo>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.market.clone();
     let resp = c
         .get_price(GetPriceRequest {
@@ -206,7 +213,7 @@ pub async fn klines(
     page: QueryParam<u32, false>,
     page_size: QueryParam<u32, false>,
 ) -> ApiResult<Json<GetKlinesResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.market.clone();
     let resp = c
         .get_klines(GetKlinesRequest {
@@ -230,7 +237,7 @@ pub async fn klines(
 /// List available dapps
 #[endpoint]
 pub async fn list_dapps(depot: &mut Depot) -> ApiResult<Json<ListDappsResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.dapp.clone();
     let resp = c
         .list_dapps(ListDappsRequest {
@@ -258,7 +265,7 @@ pub async fn rent_estimate(
     depot: &mut Depot,
     body: JsonBody<RentBody>,
 ) -> ApiResult<Json<EstimateEnergyResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let body = body.into_inner();
     let mut c = st.rent.clone();
     let resp = c
@@ -281,14 +288,15 @@ pub async fn app_config(
     depot: &mut Depot,
     platform: QueryParam<String, false>,
 ) -> ApiResult<Json<AppConfigInfo>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.cms.clone();
+    let app_version = std::env::var("APP_VERSION").unwrap_or_else(|_| "0.1.0".into());
     let resp = c
         .get_app_config(GetAppConfigRequest {
             platform: platform
                 .into_inner()
                 .unwrap_or_else(|| "ios".into()),
-            version: "0.1.0".into(),
+            version: app_version,
         })
         .await
         .map_err(AppError::from)?;
@@ -303,7 +311,7 @@ pub async fn list_guides(
     page: QueryParam<u32, false>,
     page_size: QueryParam<u32, false>,
 ) -> ApiResult<Json<ListGuidesResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.cms.clone();
     let resp = c
         .list_guides(ListGuidesRequest {
@@ -332,7 +340,7 @@ pub async fn gas_pool(
     depot: &mut Depot,
     chain_index: PathParam<i64>,
 ) -> ApiResult<Json<GasPoolInfo>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let mut c = st.gaspool.clone();
     let resp = c
         .get_pool(GetPoolRequest {
@@ -349,7 +357,7 @@ pub async fn gas_sponsor(
     depot: &mut Depot,
     body: JsonBody<SponsorBody>,
 ) -> ApiResult<Json<SponsorResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let body = body.into_inner();
     let raw = hex::decode(body.user_op_or_tx.trim_start_matches("0x"))
         .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
@@ -375,7 +383,7 @@ pub async fn estimate_gas(
     depot: &mut Depot,
     body: JsonBody<EstimateGasBody>,
 ) -> ApiResult<Json<EstimateGasResponse>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let body = body.into_inner();
     let data = body
         .data
@@ -406,7 +414,7 @@ pub async fn register(
     depot: &mut Depot,
     body: JsonBody<RegisterBody>,
 ) -> ApiResult<Json<UserInfo>> {
-    let st = depot.get_typed::<Arc<GwState>>().unwrap();
+    let st = require_state(depot)?;
     let body = body.into_inner();
     let mut c = st.user.clone();
     let resp = c
@@ -416,4 +424,46 @@ pub async fn register(
         .await
         .map_err(AppError::from)?;
     Ok(Json(UserInfo::from(resp.into_inner())))
+}
+
+/// List wallet addresses for a user
+#[endpoint]
+pub async fn list_addresses(
+    depot: &mut Depot,
+    user_id: QueryParam<String, false>,
+    chain_index: QueryParam<i64, false>,
+) -> ApiResult<Json<ListAddressesResponse>> {
+    let st = require_state(depot)?;
+    let user_id = user_id
+        .into_inner()
+        .ok_or_else(|| AppError::InvalidArgument("user_id is required".into()))?;
+    let mut c = st.user.clone();
+    let resp = c
+        .list_addresses(ListAddressesRequest {
+            user_id,
+            chain_index: chain_index.into_inner().unwrap_or(0),
+        })
+        .await
+        .map_err(AppError::from)?;
+    let inner = resp.into_inner();
+    Ok(Json(ListAddressesResponse {
+        items: inner.items.into_iter().map(AddressInfo::from).collect(),
+    }))
+}
+
+/// Get service metrics (for monitoring)
+#[endpoint]
+pub async fn metrics(depot: &mut Depot) -> ApiResult<Json<MetricsResponse>> {
+    let st = require_state(depot)?;
+    let snapshot = st.metrics.snapshot();
+    Ok(Json(MetricsResponse {
+        requests_total: snapshot.requests_total,
+        requests_success: snapshot.requests_success,
+        requests_error: snapshot.requests_error,
+        db_queries_total: snapshot.db_queries_total,
+        db_queries_error: snapshot.db_queries_error,
+        rpc_calls_total: snapshot.rpc_calls_total,
+        rpc_calls_error: snapshot.rpc_calls_error,
+        events_published: snapshot.events_published,
+    }))
 }

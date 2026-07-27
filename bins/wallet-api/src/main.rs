@@ -4,6 +4,7 @@ mod service;
 use clap::Parser;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tonic::transport::Server;
 use tracing_subscriber::EnvFilter;
 use wallet_chain::build_registry;
@@ -12,6 +13,7 @@ use wallet_db::{clickhouse::ClickHouseDb, Db};
 use wallet_domain::AppState;
 use wallet_events::{MemoryEventBus, NatsEventBus};
 use wallet_proto::wallet::v1::admin::{
+    admin_cms_service_server::AdminCmsServiceServer,
     admin_dapp_service_server::AdminDappServiceServer,
     admin_gas_pool_service_server::AdminGasPoolServiceServer,
     admin_network_service_server::AdminNetworkServiceServer,
@@ -75,6 +77,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("wallet-api listening on {addr}");
 
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        tracing::info!("shutting down wallet-api...");
+        let _ = shutdown_tx.send(true);
+    });
+
     Server::builder()
         .add_service(UserServiceServer::new(UserSvc(state.clone())))
         .add_service(TokenServiceServer::new(TokenSvc(state.clone())))
@@ -95,7 +104,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(AdminGasPoolServiceServer::new(AdminGasSvc(state.clone())))
         .add_service(AdminSwapServiceServer::new(AdminSwapSvc(state.clone())))
         .add_service(AdminTransactionServiceServer::new(AdminTxSvc(state.clone())))
-        .serve(addr)
+        .add_service(AdminCmsServiceServer::new(AdminCmsSvc(state.clone())))
+        .serve_with_shutdown(addr, async move {
+            shutdown_rx.clone().changed().await.ok();
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        })
         .await?;
 
     Ok(())

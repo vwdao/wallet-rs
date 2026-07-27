@@ -1,4 +1,5 @@
 mod parser;
+mod reindex;
 mod reporter;
 mod syncer;
 
@@ -33,14 +34,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let chain_index = ChainIndex(cfg.chain_index);
     let handle = registry.get(chain_index)?.clone();
-    syncer::run(syncer::SyncRuntime {
-        db,
-        chain_index,
-        chain: handle,
-        events,
-        poll_interval_ms: cfg.poll_interval_ms,
-        confirmations: cfg.chain.confirmations,
-    })
-    .await?;
+    let handle_for_reindex = handle.clone();
+    let events_for_reindex = events.clone();
+    let db_for_reindex = db.clone();
+
+    tokio::select! {
+        r = syncer::run(syncer::SyncRuntime {
+            db,
+            chain_index,
+            chain: handle,
+            events,
+            poll_interval_ms: cfg.poll_interval_ms,
+            confirmations: cfg.chain.confirmations,
+        }) => { r?; }
+        r = reindex::start(db_for_reindex, chain_index, Arc::new(handle_for_reindex), events_for_reindex) => { r?; }
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("shutting down wallet-sync...");
+        }
+    }
     Ok(())
 }

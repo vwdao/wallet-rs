@@ -35,6 +35,7 @@ use state_injector::StateInjector;
 #[derive(Clone)]
 pub struct GwState {
     pub cfg: GatewayConfig,
+    pub metrics: wallet_domain::Metrics,
     pub user: wallet_proto::wallet::v1::user_service_client::UserServiceClient<
         tonic::transport::Channel,
     >,
@@ -86,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state = Arc::new(GwState {
         cfg: cfg.clone(),
+        metrics: wallet_domain::Metrics::new(),
         user: wallet_proto::wallet::v1::user_service_client::UserServiceClient::new(
             channel.clone(),
         ),
@@ -140,23 +142,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .push(Router::with_path("cms/config").get(handler::app_config))
         .push(Router::with_path("cms/guides").get(handler::list_guides))
         .push(Router::with_path("users/register").post(handler::register))
+        .push(Router::with_path("users/addresses").get(handler::list_addresses))
         .push(Router::with_path("tokens/list").get(handler::list_tokens));
+
+    let cors = if cfg.allowed_origins.is_empty() {
+        Cors::permissive()
+    } else {
+        use salvo::cors::AllowOrigin;
+        let origins: Vec<String> = cfg.allowed_origins.clone();
+        Cors::new()
+            .allow_origin(AllowOrigin::list(origins.iter().filter_map(|o| o.parse().ok())))
+            .allow_methods([salvo::http::Method::GET, salvo::http::Method::POST, salvo::http::Method::OPTIONS])
+            .allow_headers(salvo::cors::AllowHeaders::mirror_request())
+    };
 
     let app = Router::new()
         .push(Router::with_path("healthz").get(handler::healthz))
+        .push(Router::with_path("metrics").get(handler::metrics))
         .push(auth_router)
         .push(public_router)
         .hoop(StateInjector(state))
-        .hoop(Cors::permissive().into_handler());
+        .hoop(cors.into_handler());
 
     let doc = OpenApi::new("Wallet App API", "0.1.0").merge_router(&app);
-    let app = app
-        .push(doc.into_router("/api-doc/openapi.json"))
-        .push(SwaggerUi::new("/api-doc/openapi.json").into_router("/swagger-ui"));
+    let mut app = app.push(doc.into_router("/api-doc/openapi.json"));
+    let is_prod = std::env::var("APP_ENV")
+        .map(|v| v == "production" || v == "prod")
+        .unwrap_or(false);
+    if !is_prod {
+        app = app.push(SwaggerUi::new("/api-doc/openapi.json").into_router("/swagger-ui"));
+    }
 
     let addr: SocketAddr = cfg.listen.parse()?;
     tracing::info!("apigw-app on {addr}");
     let listener = TcpListener::new(addr.to_string()).bind().await;
-    Server::new(listener).serve(app).await;
+    let server = Server::new(listener);
+    let handle = server.handle();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        tracing::info!("shutting down apigw-app...");
+        handle.stop_graceful(Some(std::time::Duration::from_secs(30)));
+    });
+    server.serve(app).await;
     Ok(())
 }

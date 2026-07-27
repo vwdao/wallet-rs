@@ -68,7 +68,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddr = cfg.listen.parse()?;
     tracing::info!("chain-gateway on {addr}");
     let listener = TcpListener::new(addr.to_string()).bind().await;
-    Server::new(listener).serve(app).await;
+    let server = Server::new(listener);
+    let handle = server.handle();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        tracing::info!("shutting down chain-gateway...");
+        handle.stop_graceful(Some(std::time::Duration::from_secs(30)));
+    });
+    server.serve(app).await;
     Ok(())
 }
 
@@ -80,7 +87,7 @@ async fn healthz(_req: &mut Request, _depot: &mut Depot, res: &mut Response) {
 #[handler]
 async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     let result: Result<Json<Value>, AppError> = async {
-        let st = depot.get_typed::<Gw>().expect("Gw state not inserted");
+        let st = depot.get_typed::<Gw>().map_err(|_| AppError::internal("Gw state not inserted"))?;
 
         let api_key = req
             .headers()
@@ -94,7 +101,7 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await
         {
             Ok(r) => (r.rate_limit_per_min, r.enabled),
-            Err(_) => (60, true),
+            Err(_) => return Err(AppError::Forbidden),
         };
         if !enabled {
             return Err(AppError::Forbidden);
@@ -159,5 +166,9 @@ fn check_rate(
         return Err(AppError::Unavailable("rate limit".into()));
     }
     entry.push(now);
+    // Evict stale keys (entries with no recent requests) periodically
+    if map.len() > 1000 {
+        map.retain(|_, v| !v.is_empty() && v.iter().any(|t| now.duration_since(*t) < Duration::from_secs(120)));
+    }
     Ok(())
 }

@@ -3,3 +3,4 @@ grpc_endpoint: "http://127.0.0.1:9000"
 jwt:
   secret: "dev-secret-change-me"
   issuer: "viva-wallet"
+allowed_origins: []

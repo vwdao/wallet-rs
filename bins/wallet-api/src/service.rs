@@ -480,6 +480,7 @@ impl CmsService for CmsSvc {
             .get_app_config(&r.platform)
             .await?;
         Ok(Response::new(AppConfig {
+            platform: r.platform,
             min_version: c.min_version,
             latest_version: c.latest_version,
             force_update_url: c.force_update_url.unwrap_or_default(),
@@ -503,6 +504,7 @@ impl CmsService for CmsSvc {
                     id: g.id.to_string(),
                     title: g.title,
                     body: g.body,
+                    locale: g.locale,
                 })
                 .collect(),
             meta: Some(PageMeta {
@@ -519,7 +521,7 @@ pub fn page_of(p: Option<&Pagination>) -> (u32, u32) {
         page: 1,
         page_size: 20,
     });
-    (p.page.max(1), p.page_size.max(1).min(100))
+    (p.page.max(1), p.page_size.clamp(1, 100))
 }
 
 pub fn token_from_row(t: wallet_db::TokenRow) -> Token {

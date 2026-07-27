@@ -152,6 +152,9 @@ impl BlockSource for SolanaChain {
         Ok(result.as_u64().unwrap_or(0))
     }
 
+    /// Fetch block transactions using `transactionDetails: "accounts"` mode.
+    /// Note: the `value` field in NormalizedTx is not available in this mode
+    /// and defaults to zero. Use `getBalance` RPC for actual balance queries.
     async fn fetch_block_txs(&self, height: u64) -> AppResult<Vec<NormalizedTx>> {
         let result = self
             .rpc(
@@ -174,7 +177,7 @@ impl BlockSource for SolanaChain {
             .unwrap_or_default();
         Ok(txs
             .into_iter()
-            .filter_map(|tx| {
+            .map(|tx| {
                 let sig = tx
                     .get("transaction")
                     .and_then(|t| t.get("signatures"))
@@ -195,7 +198,7 @@ impl BlockSource for SolanaChain {
                         k.get("pubkey").and_then(|p| p.as_str()).map(|s| Address::new(s.to_string()))
                     }
                 });
-                let from = fee_payer.clone();
+                let from = fee_payer;
                 let to = account_keys.get(1).and_then(|k| {
                     if let Some(s) = k.as_str() {
                         Some(Address::new(s.to_string()))
@@ -203,7 +206,7 @@ impl BlockSource for SolanaChain {
                         k.get("pubkey").and_then(|p| p.as_str()).map(|s| Address::new(s.to_string()))
                     }
                 });
-                Some(NormalizedTx {
+                NormalizedTx {
                     hash: TxHash::new(sig),
                     from,
                     to,
@@ -211,7 +214,7 @@ impl BlockSource for SolanaChain {
                     block_number: height,
                     status: TxStatus::Success,
                     raw: json!({ "signature": sig }),
-                })
+                }
             })
             .collect())
     }

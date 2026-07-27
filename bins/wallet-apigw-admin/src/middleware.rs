@@ -41,9 +41,14 @@ pub async fn require_admin_jwt(
         }
     };
 
-    let st = depot
-        .get_typed::<Arc<AdminState>>()
-        .expect("AdminState not inserted");
+    let st = match depot.get_typed::<Arc<AdminState>>() {
+        Ok(s) => s.clone(),
+        Err(_) => {
+            res.render(AppError::internal("state not initialized"));
+            flow.skip_rest();
+            return;
+        }
+    };
 
     let mut validation = Validation::default();
     validation.set_issuer(&[st.cfg.jwt.issuer.as_str()]);

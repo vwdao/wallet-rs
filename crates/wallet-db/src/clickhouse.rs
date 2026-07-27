@@ -27,23 +27,32 @@ impl ClickHouseDb {
     }
 
     pub async fn ensure_schema(&self) -> AppResult<()> {
-        self.client
-            .query(
-                r#"
-                CREATE TABLE IF NOT EXISTS kline_1m (
-                    symbol String,
-                    open_time Int64,
-                    open String,
-                    high String,
-                    low String,
-                    close String,
-                    volume String
-                ) ENGINE = MergeTree ORDER BY (symbol, open_time)
-                "#,
-            )
-            .execute()
-            .await
-            .map_err(|e| AppError::Unavailable(format!("clickhouse: {e}")))?;
+        let kline_schema = r#"
+            CREATE TABLE IF NOT EXISTS {table} (
+                symbol String,
+                open_time Int64,
+                open String,
+                high String,
+                low String,
+                close String,
+                volume String
+            ) ENGINE = MergeTree ORDER BY (symbol, open_time)
+        "#;
+
+        for table in &[
+            "kline_1m",
+            "kline_5m",
+            "kline_15m",
+            "kline_1h",
+            "kline_4h",
+            "kline_1d",
+        ] {
+            self.client
+                .query(&kline_schema.replace("{table}", table))
+                .execute()
+                .await
+                .map_err(|e| AppError::Unavailable(format!("clickhouse kline: {e}")))?;
+        }
 
         self.client
             .query(
@@ -73,6 +82,22 @@ impl ClickHouseDb {
             .execute()
             .await
             .map_err(|e| AppError::Unavailable(format!("clickhouse: {e}")))?;
+
+        self.client
+            .query(
+                r#"
+                CREATE TABLE IF NOT EXISTS user_event (
+                    user_id String,
+                    event_type String,
+                    ts Int64,
+                    payload String
+                ) ENGINE = MergeTree ORDER BY (ts)
+                "#,
+            )
+            .execute()
+            .await
+            .map_err(|e| AppError::Unavailable(format!("clickhouse user_event: {e}")))?;
+
         Ok(())
     }
 }

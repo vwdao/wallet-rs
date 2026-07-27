@@ -18,6 +18,11 @@ impl Hub {
     pub fn publish(&self, topic: &str, payload: Value) {
         if let Some(tx) = self.topics.get(topic) {
             let _ = tx.send(payload);
+            // If no active receivers remain, remove the topic to prevent memory leak
+            if tx.receiver_count() == 0 {
+                drop(tx);
+                self.topics.remove(topic);
+            }
         }
     }
 }

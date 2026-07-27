@@ -67,6 +67,10 @@ pub struct AdminState {
         wallet_proto::wallet::v1::admin::admin_transaction_service_client::AdminTransactionServiceClient<
             tonic::transport::Channel,
         >,
+    pub cms:
+        wallet_proto::wallet::v1::admin::admin_cms_service_client::AdminCmsServiceClient<
+            tonic::transport::Channel,
+        >,
 }
 
 #[derive(Parser, Debug)]
@@ -109,6 +113,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             channel.clone(),
         ),
         transactions: wallet_proto::wallet::v1::admin::admin_transaction_service_client::AdminTransactionServiceClient::new(
+            channel.clone(),
+        ),
+        cms: wallet_proto::wallet::v1::admin::admin_cms_service_client::AdminCmsServiceClient::new(
             channel,
         ),
     });
@@ -139,22 +146,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .push(Router::with_path("gaspool/enable").post(handler::set_gas_pool_enabled))
         .push(Router::with_path("swap/providers").post(handler::upsert_swap_provider))
         .push(Router::with_path("transactions/reindex").post(handler::reindex))
+        .push(
+            Router::with_path("cms/app-configs")
+                .get(handler::get_app_config)
+                .post(handler::upsert_app_config),
+        )
+        .push(
+            Router::with_path("cms/guides")
+                .get(handler::list_guides)
+                .post(handler::upsert_guide),
+        )
+        .push(Router::with_path("cms/guides/{id}").delete(handler::delete_guide))
         .hoop(middleware::require_admin_jwt);
+
+    let cors = if cfg.allowed_origins.is_empty() {
+        Cors::permissive()
+    } else {
+        use salvo::cors::AllowOrigin;
+        let origins: Vec<String> = cfg.allowed_origins.clone();
+        Cors::new()
+            .allow_origin(AllowOrigin::list(origins.iter().filter_map(|o| o.parse().ok())))
+            .allow_methods([salvo::http::Method::GET, salvo::http::Method::POST, salvo::http::Method::OPTIONS])
+            .allow_headers(salvo::cors::AllowHeaders::mirror_request())
+    };
 
     let app = Router::new()
         .push(Router::with_path("healthz").get(handler::healthz))
         .push(admin_router)
         .hoop(StateInjector(state))
-        .hoop(Cors::permissive().into_handler());
+        .hoop(cors.into_handler());
 
     let doc = OpenApi::new("Wallet Admin API", "0.1.0").merge_router(&app);
-    let app = app
-        .push(doc.into_router("/api-doc/openapi.json"))
-        .push(SwaggerUi::new("/api-doc/openapi.json").into_router("/swagger-ui"));
+    let mut app = app.push(doc.into_router("/api-doc/openapi.json"));
+    let is_prod = std::env::var("APP_ENV")
+        .map(|v| v == "production" || v == "prod")
+        .unwrap_or(false);
+    if !is_prod {
+        app = app.push(SwaggerUi::new("/api-doc/openapi.json").into_router("/swagger-ui"));
+    }
 
     let addr: SocketAddr = cfg.listen.parse()?;
     tracing::info!("apigw-admin on {addr}");
     let listener = TcpListener::new(addr.to_string()).bind().await;
-    Server::new(listener).serve(app).await;
+    let server = Server::new(listener);
+    let handle = server.handle();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        tracing::info!("shutting down apigw-admin...");
+        handle.stop_graceful(Some(std::time::Duration::from_secs(30)));
+    });
+    server.serve(app).await;
     Ok(())
 }

@@ -98,11 +98,40 @@ impl BlockSource for TronChain {
                     .get("txID")
                     .and_then(|h| h.as_str())
                     .unwrap_or_default();
+                let raw_data = tx.get("raw_data");
+                let from = raw_data
+                    .and_then(|r| r.get("contract"))
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|c| c.get("parameter"))
+                    .and_then(|p| p.get("value"))
+                    .and_then(|v| v.get("owner_address"))
+                    .and_then(|v| v.as_str())
+                    .map(Address::new);
+                let to = raw_data
+                    .and_then(|r| r.get("contract"))
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|c| c.get("parameter"))
+                    .and_then(|p| p.get("value"))
+                    .and_then(|v| v.get("to_address"))
+                    .and_then(|v| v.as_str())
+                    .map(Address::new);
+                let value = raw_data
+                    .and_then(|r| r.get("contract"))
+                    .and_then(|c| c.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|c| c.get("parameter"))
+                    .and_then(|p| p.get("value"))
+                    .and_then(|v| v.get("amount"))
+                    .and_then(|v| v.as_i64())
+                    .map(|a| Amount::new(Decimal::from(a), 6))
+                    .unwrap_or_else(|| Amount::zero(6));
                 NormalizedTx {
                     hash: TxHash::new(hash),
-                    from: None,
-                    to: None,
-                    value: Amount::zero(6),
+                    from,
+                    to,
+                    value,
                     block_number: height,
                     status: TxStatus::Success,
                     raw: tx,
@@ -126,12 +155,14 @@ impl GasEstimator for TronChain {
             } else {
                 ""
             };
-            let params: Vec<String> = if !tx.data.is_none() && tx.data.as_ref().map_or(0, |d| d.len()) > 4
-            {
-                let raw = tx.data.as_ref().unwrap();
-                raw.chunks(32)
-                    .map(|chunk| hex::encode(chunk))
-                    .collect()
+            let params: Vec<String> = if let Some(raw) = tx.data.as_ref() {
+                if raw.len() > 4 {
+                    raw.chunks(32)
+                        .map(hex::encode)
+                        .collect()
+                } else {
+                    vec![]
+                }
             } else {
                 vec![]
             };

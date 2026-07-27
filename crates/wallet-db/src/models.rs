@@ -1,3 +1,5 @@
+#![allow(clippy::wrong_self_convention)]
+
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -101,6 +103,7 @@ pub struct Tx {
 
     pub hash: String,
 
+    #[allow(clippy::wrong_self_convention)]
     pub from_address: Option<String>,
 
     pub to_address: Option<String>,
@@ -165,6 +168,7 @@ pub struct DexQuote {
 
     pub wallet: String,
 
+    #[allow(clippy::wrong_self_convention)]
     pub from_token: String,
 
     pub to_token: String,

@@ -42,14 +42,6 @@ impl Db {
         Ok(())
     }
 
-    pub fn inner(&mut self) -> &mut toasty::Db {
-        &mut self.inner
-    }
-
-    pub fn inner_ref(&self) -> &toasty::Db {
-        &self.inner
-    }
-
     pub fn clone_inner(&self) -> toasty::Db {
         self.inner.clone()
     }

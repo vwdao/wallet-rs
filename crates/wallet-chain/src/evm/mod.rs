@@ -84,6 +84,21 @@ impl BalanceReader for EvmChain {
 #[async_trait]
 impl TokenBalance for EvmChain {
     async fn token_balance(&self, wallet: &Address, token: &Address) -> AppResult<Amount> {
+        // First, fetch decimals from the token contract: decimals() = 0x313ce567
+        let decimals_result = self
+            .rpc(
+                "eth_call",
+                json!([{ "to": token.as_str(), "data": "0x313ce567" }, "latest"]),
+            )
+            .await;
+        let decimals = decimals_result
+            .ok()
+            .and_then(|r| r.as_str().map(|s| s.to_string()))
+            .and_then(|hex| {
+                u32::from_str_radix(hex.trim_start_matches("0x"), 16).ok()
+            })
+            .unwrap_or(18);
+
         // balanceOf(address) selector 0x70a08231
         let mut data = String::from("0x70a08231");
         let addr = wallet.as_str().trim_start_matches("0x");
@@ -96,7 +111,7 @@ impl TokenBalance for EvmChain {
             .await?;
         let hex = result.as_str().unwrap_or("0x0");
         let raw = u128::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap_or(0);
-        Ok(Amount::new(Decimal::from(raw), 18))
+        Ok(Amount::new(Decimal::from(raw), decimals))
     }
 }
 
@@ -171,10 +186,39 @@ impl GasEstimator for EvmChain {
         let result = self.rpc("eth_estimateGas", json!([obj])).await?;
         let hex = result.as_str().unwrap_or("0x5208");
         let gas_limit = u64::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap_or(21_000);
+
+        // Fetch EIP-1559 fee data
+        let fee_result = self.rpc("eth_feeHistory", json!([3, "latest", [25, 50, 75]])).await;
+        let (max_fee, max_priority) = match fee_result {
+            Ok(fee) => {
+                let base_fee = fee
+                    .pointer("/baseFeePerGas")
+                    .and_then(|b| b.as_array())
+                    .and_then(|arr| arr.last())
+                    .and_then(|v| v.as_str())
+                    .and_then(|h| u128::from_str_radix(h.trim_start_matches("0x"), 16).ok())
+                    .unwrap_or(1_000_000_000); // 1 gwei fallback
+
+                let priority_fee = fee
+                    .pointer("/reward")
+                    .and_then(|r| r.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|r| r.as_array())
+                    .and_then(|arr| arr.get(1))
+                    .and_then(|v| v.as_str())
+                    .and_then(|h| u128::from_str_radix(h.trim_start_matches("0x"), 16).ok())
+                    .unwrap_or(1_500_000_000); // 1.5 gwei fallback
+
+                let max_fee = base_fee * 2 + priority_fee;
+                (Some(max_fee), Some(priority_fee))
+            }
+            Err(_) => (None, None),
+        };
+
         Ok(GasEstimate {
             gas_limit,
-            max_fee_per_gas: None,
-            max_priority_fee_per_gas: None,
+            max_fee_per_gas: max_fee,
+            max_priority_fee_per_gas: max_priority,
         })
     }
 }

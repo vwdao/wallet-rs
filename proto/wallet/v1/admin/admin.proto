@@ -5,6 +5,7 @@ import "wallet/v1/common.proto";
 import "wallet/v1/network.proto";
 import "wallet/v1/token.proto";
 import "wallet/v1/dapp.proto";
+import "wallet/v1/cms.proto";
 
 service AdminNetworkService {
   rpc UpsertNetwork(wallet.v1.Network) returns (wallet.v1.Network);
@@ -84,6 +85,14 @@ service AdminTransactionService {
   rpc Reindex(ReindexRequest) returns (wallet.v1.Empty);
 }
 
+service AdminCmsService {
+  rpc UpsertAppConfig(wallet.v1.AppConfig) returns (wallet.v1.AppConfig);
+  rpc GetAppConfig(wallet.v1.GetAppConfigRequest) returns (wallet.v1.AppConfig);
+  rpc UpsertGuide(wallet.v1.Guide) returns (wallet.v1.Guide);
+  rpc DeleteGuide(DeleteGuideRequest) returns (wallet.v1.Empty);
+  rpc ListGuides(wallet.v1.ListGuidesRequest) returns (wallet.v1.ListGuidesResponse);
+}
+
 message DeleteEndpointRequest {
   string id = 1;
 }
@@ -92,4 +101,8 @@ message ReindexRequest {
   int64 chain_index = 1;
   uint64 from_block = 2;
   uint64 to_block = 3;
+}
+
+message DeleteGuideRequest {
+  string id = 1;
 }

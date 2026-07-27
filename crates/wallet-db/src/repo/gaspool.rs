@@ -72,7 +72,7 @@ impl<'a> GasPoolRepo<'a> {
         if let Some(mut existing) = rows.into_iter().next() {
             existing
                 .update()
-                .balance(balance.clone())
+                .balance(*balance)
                 .exec(&mut db)
                 .await
                 .map_err(|e| AppError::internal(e.to_string()))?;
