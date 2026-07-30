@@ -45,11 +45,11 @@ pub trait SwapProvider: Send + Sync {
 
 fn chain_id_from_index(ci: ChainIndex) -> AppResult<u64> {
     match ci.as_i64() {
-        60 => Ok(1),       // ETH mainnet
-        56 => Ok(56),      // BSC
-        137 => Ok(137),    // Polygon
+        60 => Ok(1),        // ETH mainnet
+        56 => Ok(56),       // BSC
+        137 => Ok(137),     // Polygon
         42161 => Ok(42161), // Arbitrum
-        10 => Ok(10),      // Optimism
+        10 => Ok(10),       // Optimism
         8453 => Ok(8453),   // Base
         other => Err(AppError::InvalidArgument(format!(
             "unsupported chain_index {other} for swap"
@@ -232,7 +232,9 @@ impl SwapProvider for OkxProvider {
             amount,
         );
         let full_url = format!("{}?{}", path, query_string);
-        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        let timestamp = chrono::Utc::now()
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
         let sign = okx_hmac_sign(&self.secret, &timestamp, "GET", &full_url, "");
         let resp = self
             .http
@@ -290,7 +292,9 @@ impl SwapProvider for OkxProvider {
             "slippage": slippage_pct.to_string(),
         });
         let body_str = body_json.to_string();
-        let timestamp = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string();
+        let timestamp = chrono::Utc::now()
+            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+            .to_string();
         let sign = okx_hmac_sign(&self.secret, &timestamp, "POST", path, &body_str);
         let resp = self
             .http
@@ -452,10 +456,7 @@ impl SwapProvider for MetaPathProvider {
             .and_then(|v| v.as_str())
             .unwrap_or("0")
             .to_string();
-        let data_hex = v
-            .get("data")
-            .and_then(|d| d.as_str())
-            .unwrap_or("0x");
+        let data_hex = v.get("data").and_then(|d| d.as_str()).unwrap_or("0x");
         let tx_data = hex::decode(data_hex.trim_start_matches("0x"))
             .map_err(|e| AppError::InvalidArgument(format!("metapath tx data hex: {e}")))?;
         Ok(BuiltSwap {
@@ -496,7 +497,9 @@ impl<'a> SwapService<'a> {
             "" | "1inch" => {
                 let api_key = std::env::var("ONEINCH_API_KEY").unwrap_or_default();
                 if api_key.is_empty() {
-                    return Err(AppError::Unavailable("ONEINCH_API_KEY not configured".into()));
+                    return Err(AppError::Unavailable(
+                        "ONEINCH_API_KEY not configured".into(),
+                    ));
                 }
                 Ok(Box::new(OneInchProvider {
                     http: self.state.http.clone(),
@@ -522,7 +525,9 @@ impl<'a> SwapService<'a> {
             "metapath" => {
                 let api_key = std::env::var("METAPATH_API_KEY").unwrap_or_default();
                 if api_key.is_empty() {
-                    return Err(AppError::Unavailable("METAPATH_API_KEY not configured".into()));
+                    return Err(AppError::Unavailable(
+                        "METAPATH_API_KEY not configured".into(),
+                    ));
                 }
                 Ok(Box::new(MetaPathProvider {
                     http: self.state.http.clone(),

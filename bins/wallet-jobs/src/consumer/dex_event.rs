@@ -15,7 +15,10 @@ pub async fn start(db: Db, bus: Arc<dyn EventBus>) -> anyhow::Result<()> {
                 let from_token = v.get("from_token").and_then(|s| s.as_str()).unwrap_or("");
                 let to_token = v.get("to_token").and_then(|s| s.as_str()).unwrap_or("");
                 let amount = v.get("amount").and_then(|s| s.as_str()).unwrap_or("0");
-                let price_impact = v.get("price_impact").and_then(|s| s.as_str()).unwrap_or("0");
+                let price_impact = v
+                    .get("price_impact")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("0");
                 let tx_hash = v.get("tx_hash").and_then(|s| s.as_str()).unwrap_or("");
                 let wallet = v.get("wallet").and_then(|s| s.as_str()).unwrap_or("");
                 let chain_index = v.get("chain_index").and_then(|c| c.as_i64()).unwrap_or(0);

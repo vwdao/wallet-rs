@@ -7,6 +7,8 @@ use wallet_db::RpcEndpoint;
 use wallet_error::{AppError, AppResult};
 
 use crate::health::is_archive_method;
+use crate::protocol::parse_endpoint_url;
+use crate::transports;
 
 #[derive(Debug, Clone)]
 struct CachedEndpoint {
@@ -193,22 +195,42 @@ impl RpcRouter {
         sorted.sort_by(|a, b| {
             b.priority
                 .cmp(&a.priority)
+                .then(
+                    b.block_height
+                        .unwrap_or_default()
+                        .cmp(&a.block_height.unwrap_or_default()),
+                )
                 .then(a.avg_latency_ms.cmp(&b.avg_latency_ms))
         });
 
-        let top_n = sorted.len().min(3);
+        let top_n = sorted.len().min(8);
         let candidates = &sorted[..top_n];
 
-        let total_weight: i32 = candidates.iter().map(|e| e.weight).sum();
+        let total_weight: i32 = candidates.iter().map(|e| self.effective_weight(e)).sum();
         let mut rng = rand::thread_rng();
         let mut pick = rng.gen_range(0..total_weight);
         for ep in candidates {
-            pick -= ep.weight;
+            pick -= self.effective_weight(ep);
             if pick < 0 {
                 return Ok(ep.url.clone());
             }
         }
         Ok(candidates.last().unwrap().url.clone())
+    }
+
+    fn effective_weight(&self, endpoint: &CachedEndpoint) -> i32 {
+        let latency_bonus = match endpoint.avg_latency_ms {
+            l if l <= 250 => 4,
+            l if l <= 600 => 3,
+            l if l <= 1200 => 2,
+            _ => 1,
+        };
+        let priority_bonus = endpoint.priority.clamp(0, 5) + 1;
+        endpoint
+            .weight
+            .max(1)
+            .saturating_mul(priority_bonus)
+            .saturating_mul(latency_bonus)
     }
 
     fn is_tier_allowed(&self, endpoint_tier: &str, user_tier: &str) -> bool {
@@ -253,45 +275,22 @@ impl RpcRouter {
                 Err(e) => return Err(e),
             };
 
-            match self
-                .http
-                .post(&url)
-                .json(body)
-                .timeout(timeout)
-                .send()
-                .await
-            {
-                Ok(resp) => {
-                    if !resp.status().is_success() {
-                        self.mark_failure(&url);
-                        last_err = Some(AppError::Unavailable(format!(
-                            "rpc returned {}",
-                            resp.status()
-                        )));
-                        continue;
-                    }
-                    match resp.json::<serde_json::Value>().await {
-                        Ok(v) => {
-                            if v.get("error").is_some() {
-                                self.mark_failure(&url);
-                                last_err = Some(AppError::Unavailable(format!(
-                                    "rpc error: {}",
-                                    v["error"]
-                                )));
-                                continue;
-                            }
-                            self.mark_success(&url);
-                            return Ok(v);
-                        }
-                        Err(e) => {
-                            self.mark_failure(&url);
-                            last_err = Some(AppError::Unavailable(e.to_string()));
-                        }
-                    }
+            if parse_endpoint_url(&url).is_err() {
+                self.mark_failure(&url);
+                last_err = Some(AppError::InvalidArgument(format!(
+                    "invalid endpoint url: {url}"
+                )));
+                continue;
+            }
+
+            match transports::execute_unary(&self.http, &url, body, timeout).await {
+                Ok(v) => {
+                    self.mark_success(&url);
+                    return Ok(v);
                 }
                 Err(e) => {
                     self.mark_failure(&url);
-                    last_err = Some(AppError::Unavailable(e.to_string()));
+                    last_err = Some(e);
                 }
             }
         }

@@ -11,8 +11,8 @@ use wallet_proto::wallet::v1::{
     Pagination,
 };
 
-use crate::AdminState;
 use crate::types::*;
+use crate::AdminState;
 
 type ApiResult<T> = Result<T, AppError>;
 
@@ -35,7 +35,9 @@ pub async fn list_networks(depot: &mut Depot) -> ApiResult<Json<ListNetworksResp
     let st = require_state(depot)?;
     let mut c = st.networks.clone();
     let resp = c
-        .list_networks(ListNetworksRequest { enabled_only: false })
+        .list_networks(ListNetworksRequest {
+            enabled_only: false,
+        })
         .await?;
     let inner = resp.into_inner();
     Ok(Json(ListNetworksResponse {
@@ -173,10 +175,7 @@ pub async fn list_dapps(
 
 /// Create or update a dapp
 #[endpoint]
-pub async fn upsert_dapp(
-    depot: &mut Depot,
-    body: JsonBody<DappBody>,
-) -> ApiResult<Json<DappInfo>> {
+pub async fn upsert_dapp(depot: &mut Depot, body: JsonBody<DappBody>) -> ApiResult<Json<DappInfo>> {
     let st = require_state(depot)?;
     let body = body.into_inner();
     let proto = wallet_proto::wallet::v1::Dapp {
@@ -206,11 +205,7 @@ pub async fn list_rpc_endpoints(
         .await?;
     let inner = resp.into_inner();
     Ok(Json(ListRpcEndpointsResponse {
-        items: inner
-            .items
-            .into_iter()
-            .map(RpcEndpointInfo::from)
-            .collect(),
+        items: inner.items.into_iter().map(RpcEndpointInfo::from).collect(),
     }))
 }
 
@@ -250,10 +245,8 @@ pub async fn delete_rpc_endpoint(
     let st = require_state(depot)?;
     let endpoint_id = id.into_inner();
     let mut c = st.rpc_endpoints.clone();
-    c.delete_endpoint(wallet_proto::wallet::v1::admin::DeleteEndpointRequest {
-        id: endpoint_id,
-    })
-    .await?;
+    c.delete_endpoint(wallet_proto::wallet::v1::admin::DeleteEndpointRequest { id: endpoint_id })
+        .await?;
     Ok(Json(DeletedResponse { deleted: true }))
 }
 
@@ -405,7 +398,6 @@ pub async fn delete_guide(
     let st = require_state(depot)?;
     let guide_id = id.into_inner();
     let mut c = st.cms.clone();
-    c.delete_guide(DeleteGuideRequest { id: guide_id })
-        .await?;
+    c.delete_guide(DeleteGuideRequest { id: guide_id }).await?;
     Ok(Json(DeletedResponse { deleted: true }))
 }

@@ -14,7 +14,10 @@ pub async fn start(db: Db, bus: Arc<dyn EventBus>) -> anyhow::Result<()> {
                 let v = &env.payload;
                 let hash = v.get("hash").and_then(|h| h.as_str()).unwrap_or("");
                 let chain = v.get("chain_index").and_then(|c| c.as_i64()).unwrap_or(0);
-                let status = v.get("status").and_then(|s| s.as_str()).unwrap_or("pending");
+                let status = v
+                    .get("status")
+                    .and_then(|s| s.as_str())
+                    .unwrap_or("pending");
                 let mut inner = db.clone_inner();
                 let result = toasty::sql::statement(
                     "UPDATE transactions SET status = $1, updated_at = NOW() WHERE hash = $2 AND chain_index = $3",

@@ -97,13 +97,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(SolanaServiceServer::new(SolanaSvc(state.clone())))
         .add_service(CmsServiceServer::new(CmsSvc(state.clone())))
         .add_service(AdminUserServiceServer::new(AdminUserSvc(state.clone())))
-        .add_service(AdminNetworkServiceServer::new(AdminNetworkSvc(state.clone())))
+        .add_service(AdminNetworkServiceServer::new(AdminNetworkSvc(
+            state.clone(),
+        )))
         .add_service(AdminTokenServiceServer::new(AdminTokenSvc(state.clone())))
         .add_service(AdminDappServiceServer::new(AdminDappSvc(state.clone())))
-        .add_service(AdminRpcEndpointServiceServer::new(AdminRpcSvc(state.clone())))
+        .add_service(AdminRpcEndpointServiceServer::new(AdminRpcSvc(
+            state.clone(),
+        )))
         .add_service(AdminGasPoolServiceServer::new(AdminGasSvc(state.clone())))
         .add_service(AdminSwapServiceServer::new(AdminSwapSvc(state.clone())))
-        .add_service(AdminTransactionServiceServer::new(AdminTxSvc(state.clone())))
+        .add_service(AdminTransactionServiceServer::new(AdminTxSvc(
+            state.clone(),
+        )))
         .add_service(AdminCmsServiceServer::new(AdminCmsSvc(state.clone())))
         .serve_with_shutdown(addr, async move {
             shutdown_rx.clone().changed().await.ok();

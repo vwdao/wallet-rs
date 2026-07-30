@@ -8,7 +8,10 @@ pub async fn fanout(events: Arc<dyn EventBus>, hub: Arc<Hub>) {
         let events = events.clone();
         let hub = hub.clone();
         tokio::spawn(async move {
-            let Ok(mut sub) = events.subscribe(subject, &format!("wallet-ws-{subject}")).await else {
+            let Ok(mut sub) = events
+                .subscribe(subject, &format!("wallet-ws-{subject}"))
+                .await
+            else {
                 return;
             };
             loop {

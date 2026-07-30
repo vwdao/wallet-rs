@@ -4,13 +4,13 @@ use std::sync::Arc;
 use wallet_error::AppError;
 use wallet_proto::wallet::v1::{
     BroadcastRequest, EstimateEnergyRequest, EstimateGasRequest, GetAppConfigRequest,
-    GetBalancesRequest, GetKlinesRequest, GetPriceRequest, GetPoolRequest, ListAddressesRequest,
+    GetBalancesRequest, GetKlinesRequest, GetPoolRequest, GetPriceRequest, ListAddressesRequest,
     ListDappsRequest, ListGuidesRequest, ListNetworksRequest, ListTokensRequest,
     ListTransactionsRequest, Pagination, QuoteRequest, RegisterRequest, SponsorRequest,
 };
 
-use crate::GwState;
 use crate::types::*;
+use crate::GwState;
 
 type ApiResult<T> = Result<T, AppError>;
 
@@ -195,9 +195,7 @@ pub async fn price(
     let mut c = st.market.clone();
     let resp = c
         .get_price(GetPriceRequest {
-            symbol: symbol
-                .into_inner()
-                .unwrap_or_else(|| "ETHUSDT".into()),
+            symbol: symbol.into_inner().unwrap_or_else(|| "ETHUSDT".into()),
         })
         .await
         .map_err(AppError::from)?;
@@ -217,9 +215,7 @@ pub async fn klines(
     let mut c = st.market.clone();
     let resp = c
         .get_klines(GetKlinesRequest {
-            symbol: symbol
-                .into_inner()
-                .unwrap_or_else(|| "ETHUSDT".into()),
+            symbol: symbol.into_inner().unwrap_or_else(|| "ETHUSDT".into()),
             interval: interval.into_inner().unwrap_or_else(|| "1m".into()),
             pagination: Some(Pagination {
                 page: page.into_inner().unwrap_or(1),
@@ -293,9 +289,7 @@ pub async fn app_config(
     let app_version = std::env::var("APP_VERSION").unwrap_or_else(|_| "0.1.0".into());
     let resp = c
         .get_app_config(GetAppConfigRequest {
-            platform: platform
-                .into_inner()
-                .unwrap_or_else(|| "ios".into()),
+            platform: platform.into_inner().unwrap_or_else(|| "ios".into()),
             version: app_version,
         })
         .await

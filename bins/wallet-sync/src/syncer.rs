@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use wallet_chain::{BlockSource, ChainHandle};
-use wallet_db::{SyncCursorRepo, TransactionRepo, Db};
+use wallet_db::{Db, SyncCursorRepo, TransactionRepo};
 use wallet_error::AppResult;
 use wallet_events::EventBus;
 use wallet_types::ChainIndex;

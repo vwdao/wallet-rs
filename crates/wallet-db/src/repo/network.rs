@@ -101,18 +101,16 @@ impl<'a> NetworkRepo<'a> {
                     .await
                     .map_err(|e| AppError::internal(e.to_string()))
             }
-            Err(_) => {
-                toasty::create!(RpcEndpoint {
-                    id: row.id,
-                    chain_index: row.chain_index,
-                    url: &row.url,
-                    weight: row.weight,
-                    enabled: row.enabled,
-                })
-                .exec(&mut db)
-                .await
-                .map_err(|e| AppError::internal(e.to_string()))
-            }
+            Err(_) => toasty::create!(RpcEndpoint {
+                id: row.id,
+                chain_index: row.chain_index,
+                url: &row.url,
+                weight: row.weight,
+                enabled: row.enabled,
+            })
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string())),
         }
     }
 

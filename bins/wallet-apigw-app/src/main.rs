@@ -3,8 +3,8 @@ mod middleware;
 mod types;
 
 use clap::Parser;
-use salvo::prelude::*;
 use salvo::cors::Cors;
+use salvo::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
@@ -36,9 +36,8 @@ use state_injector::StateInjector;
 pub struct GwState {
     pub cfg: GatewayConfig,
     pub metrics: wallet_domain::Metrics,
-    pub user: wallet_proto::wallet::v1::user_service_client::UserServiceClient<
-        tonic::transport::Channel,
-    >,
+    pub user:
+        wallet_proto::wallet::v1::user_service_client::UserServiceClient<tonic::transport::Channel>,
     pub token: wallet_proto::wallet::v1::token_service_client::TokenServiceClient<
         tonic::transport::Channel,
     >,
@@ -48,21 +47,17 @@ pub struct GwState {
     pub network: wallet_proto::wallet::v1::network_service_client::NetworkServiceClient<
         tonic::transport::Channel,
     >,
-    pub swap: wallet_proto::wallet::v1::swap_service_client::SwapServiceClient<
-        tonic::transport::Channel,
-    >,
+    pub swap:
+        wallet_proto::wallet::v1::swap_service_client::SwapServiceClient<tonic::transport::Channel>,
     pub market: wallet_proto::wallet::v1::market_service_client::MarketServiceClient<
         tonic::transport::Channel,
     >,
-    pub dapp: wallet_proto::wallet::v1::dapp_service_client::DappServiceClient<
-        tonic::transport::Channel,
-    >,
-    pub rent: wallet_proto::wallet::v1::rent_service_client::RentServiceClient<
-        tonic::transport::Channel,
-    >,
-    pub cms: wallet_proto::wallet::v1::cms_service_client::CmsServiceClient<
-        tonic::transport::Channel,
-    >,
+    pub dapp:
+        wallet_proto::wallet::v1::dapp_service_client::DappServiceClient<tonic::transport::Channel>,
+    pub rent:
+        wallet_proto::wallet::v1::rent_service_client::RentServiceClient<tonic::transport::Channel>,
+    pub cms:
+        wallet_proto::wallet::v1::cms_service_client::CmsServiceClient<tonic::transport::Channel>,
     pub gaspool: wallet_proto::wallet::v1::gas_pool_service_client::GasPoolServiceClient<
         tonic::transport::Channel,
     >,
@@ -112,9 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rent: wallet_proto::wallet::v1::rent_service_client::RentServiceClient::new(
             channel.clone(),
         ),
-        cms: wallet_proto::wallet::v1::cms_service_client::CmsServiceClient::new(
-            channel.clone(),
-        ),
+        cms: wallet_proto::wallet::v1::cms_service_client::CmsServiceClient::new(channel.clone()),
         gaspool: wallet_proto::wallet::v1::gas_pool_service_client::GasPoolServiceClient::new(
             channel,
         ),
@@ -128,9 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .push(Router::with_path("swap/quote").post(handler::swap_quote))
         .push(Router::with_path("gaspool/{chain_index}").get(handler::gas_pool))
         .push(Router::with_path("gaspool/sponsor").post(handler::gas_sponsor))
-        .push(
-            Router::with_path("transactions/estimate-gas").post(handler::estimate_gas),
-        )
+        .push(Router::with_path("transactions/estimate-gas").post(handler::estimate_gas))
         .push(Router::with_path("rent/estimate").post(handler::rent_estimate))
         .push(Router::with_path("dapps").get(handler::list_dapps))
         .hoop(middleware::require_app_jwt);
@@ -151,8 +142,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use salvo::cors::AllowOrigin;
         let origins: Vec<String> = cfg.allowed_origins.clone();
         Cors::new()
-            .allow_origin(AllowOrigin::list(origins.iter().filter_map(|o| o.parse().ok())))
-            .allow_methods([salvo::http::Method::GET, salvo::http::Method::POST, salvo::http::Method::OPTIONS])
+            .allow_origin(AllowOrigin::list(
+                origins.iter().filter_map(|o| o.parse().ok()),
+            ))
+            .allow_methods([
+                salvo::http::Method::GET,
+                salvo::http::Method::POST,
+                salvo::http::Method::OPTIONS,
+            ])
             .allow_headers(salvo::cors::AllowHeaders::mirror_request())
     };
 

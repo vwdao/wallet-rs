@@ -6,7 +6,9 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
-use wallet_types::{Address, Amount, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, TxStatus, ChainIndex};
+use wallet_types::{
+    Address, Amount, ChainIndex, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, TxStatus,
+};
 
 #[derive(Debug)]
 pub struct TronChain {
@@ -49,7 +51,10 @@ impl TronChain {
 impl BalanceReader for TronChain {
     async fn native_balance(&self, addr: &Address) -> AppResult<Amount> {
         let v = self
-            .post("/wallet/getaccount", json!({ "address": addr.as_str(), "visible": true }))
+            .post(
+                "/wallet/getaccount",
+                json!({ "address": addr.as_str(), "visible": true }),
+            )
             .await?;
         let balance = v.get("balance").and_then(|b| b.as_i64()).unwrap_or(0);
         Ok(Amount::new(Decimal::from(balance), 6))
@@ -65,10 +70,7 @@ impl TxBroadcaster for TronChain {
                 json!({ "transaction": hex::encode(raw) }),
             )
             .await?;
-        let hash = v
-            .get("txid")
-            .and_then(|t| t.as_str())
-            .unwrap_or_default();
+        let hash = v.get("txid").and_then(|t| t.as_str()).unwrap_or_default();
         Ok(TxHash::new(hash))
     }
 }
@@ -94,10 +96,7 @@ impl BlockSource for TronChain {
         Ok(txs
             .into_iter()
             .map(|tx| {
-                let hash = tx
-                    .get("txID")
-                    .and_then(|h| h.as_str())
-                    .unwrap_or_default();
+                let hash = tx.get("txID").and_then(|h| h.as_str()).unwrap_or_default();
                 let raw_data = tx.get("raw_data");
                 let from = raw_data
                     .and_then(|r| r.get("contract"))
@@ -157,9 +156,7 @@ impl GasEstimator for TronChain {
             };
             let params: Vec<String> = if let Some(raw) = tx.data.as_ref() {
                 if raw.len() > 4 {
-                    raw.chunks(32)
-                        .map(hex::encode)
-                        .collect()
+                    raw.chunks(32).map(hex::encode).collect()
                 } else {
                     vec![]
                 }

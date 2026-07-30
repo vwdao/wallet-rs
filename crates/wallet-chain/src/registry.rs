@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use wallet_error::{AppError, AppResult};
 use wallet_types::{
-    Address, Amount, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, ChainIndex,
+    Address, Amount, ChainIndex, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash,
 };
 
 #[derive(Clone)]
@@ -88,7 +88,11 @@ impl ChainHandle {
         }
     }
 
-    pub async fn ata_address_rpc(&self, owner: &Address, mint: &Address) -> AppResult<(Address, bool)> {
+    pub async fn ata_address_rpc(
+        &self,
+        owner: &Address,
+        mint: &Address,
+    ) -> AppResult<(Address, bool)> {
         match self {
             #[cfg(feature = "solana")]
             Self::Solana(c) => c.ata_address_rpc(owner, mint).await,
@@ -125,9 +129,7 @@ impl TokenBalance for ChainHandle {
             #[cfg(feature = "solana")]
             Self::Solana(c) => c.token_balance(wallet, token).await,
             #[cfg(feature = "bitcoin")]
-            Self::Bitcoin(_) => Err(AppError::Unimplemented(
-                "bitcoin token balance".into(),
-            )),
+            Self::Bitcoin(_) => Err(AppError::Unimplemented("bitcoin token balance".into())),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.token_balance(wallet, token).await,
         }

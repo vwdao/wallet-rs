@@ -23,10 +23,7 @@ impl<'a> UserRepo<'a> {
 
     pub async fn register(&self, external_id: &str) -> AppResult<User> {
         let mut db = self.db.clone_inner();
-        if let Ok(existing) = User::filter_by_external_id(external_id)
-            .get(&mut db)
-            .await
-        {
+        if let Ok(existing) = User::filter_by_external_id(external_id).get(&mut db).await {
             return Ok(existing);
         }
         toasty::create!(User {

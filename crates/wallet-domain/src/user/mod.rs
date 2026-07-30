@@ -22,9 +22,7 @@ impl<'a> UserService<'a> {
     }
 
     pub async fn register(&self, external_id: &str) -> AppResult<UserRow> {
-        let user = UserRepo::new(&self.state.db)
-            .register(external_id)
-            .await?;
+        let user = UserRepo::new(&self.state.db).register(external_id).await?;
         let _ = self
             .state
             .events

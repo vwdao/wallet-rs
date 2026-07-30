@@ -53,18 +53,16 @@ impl<'a> DappRepo<'a> {
                     .await
                     .map_err(|e| AppError::internal(e.to_string()))
             }
-            Err(_) => {
-                toasty::create!(Dapp {
-                    id: row.id,
-                    name: &row.name,
-                    url: &row.url,
-                    logo_url: row.logo_url.clone(),
-                    chain_indexes: row.chain_indexes.clone(),
-                })
-                .exec(&mut db)
-                .await
-                .map_err(|e| AppError::internal(e.to_string()))
-            }
+            Err(_) => toasty::create!(Dapp {
+                id: row.id,
+                name: &row.name,
+                url: &row.url,
+                logo_url: row.logo_url.clone(),
+                chain_indexes: row.chain_indexes.clone(),
+            })
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string())),
         }
     }
 }

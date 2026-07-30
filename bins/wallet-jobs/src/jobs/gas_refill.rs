@@ -84,7 +84,15 @@ async fn tick(state: &AppState) -> wallet_error::AppResult<()> {
                     }
 
                     // Execute refill transfer from cold wallet
-                    match execute_refill(state, chain_index, &pool.cold_wallet, &pool.hot_wallet, &refill_amount).await {
+                    match execute_refill(
+                        state,
+                        chain_index,
+                        &pool.cold_wallet,
+                        &pool.hot_wallet,
+                        &refill_amount,
+                    )
+                    .await
+                    {
                         Ok(tx_hash) => {
                             tracing::info!(
                                 chain_index = chain_index.as_i64(),
@@ -97,7 +105,8 @@ async fn tick(state: &AppState) -> wallet_error::AppResult<()> {
 
                             // Update pool balance in DB
                             let new_balance = balance + refill_amount;
-                            if let Err(e) = gas_repo.update_balance(chain_index, &new_balance).await {
+                            if let Err(e) = gas_repo.update_balance(chain_index, &new_balance).await
+                            {
                                 tracing::warn!(error = %e, "gas pool balance update failed");
                             }
                         }
@@ -135,9 +144,15 @@ async fn execute_refill(
         .ok_or_else(|| wallet_error::AppError::ChainNotSupported(chain_index))?;
 
     match family {
-        ChainFamily::Evm => execute_evm_refill(state, chain_handle, cold_wallet, hot_wallet, amount).await,
-        ChainFamily::Solana => execute_solana_refill(state, chain_handle, cold_wallet, hot_wallet, amount).await,
-        ChainFamily::Tron => execute_tron_refill(state, chain_handle, cold_wallet, hot_wallet, amount).await,
+        ChainFamily::Evm => {
+            execute_evm_refill(state, chain_handle, cold_wallet, hot_wallet, amount).await
+        }
+        ChainFamily::Solana => {
+            execute_solana_refill(state, chain_handle, cold_wallet, hot_wallet, amount).await
+        }
+        ChainFamily::Tron => {
+            execute_tron_refill(state, chain_handle, cold_wallet, hot_wallet, amount).await
+        }
         _ => Err(wallet_error::AppError::Unimplemented(
             "gas refill for chain family".into(),
         )),
@@ -153,25 +168,18 @@ async fn execute_evm_refill(
     amount: &rust_decimal::Decimal,
 ) -> wallet_error::AppResult<String> {
     // 1. Get nonce for cold wallet
-    let nonce = chain
-        .nonce(&Address::new(cold_wallet.to_string()))
-        .await?;
+    let nonce = chain.nonce(&Address::new(cold_wallet.to_string())).await?;
 
     // 2. Get current gas price
     let rpc_url = chain.rpc_url()?;
-    let gas_price_resp = rpc_call(
-        &state.http,
-        &rpc_url,
-        "eth_gasPrice",
-        serde_json::json!([]),
-    )
-    .await?;
+    let gas_price_resp =
+        rpc_call(&state.http, &rpc_url, "eth_gasPrice", serde_json::json!([])).await?;
     let gas_price_hex = gas_price_resp
         .get("result")
         .and_then(|r| r.as_str())
         .unwrap_or("0x3B9ACA00");
-    let gas_price = u64::from_str_radix(gas_price_hex.trim_start_matches("0x"), 16)
-        .unwrap_or(1_000_000_000);
+    let gas_price =
+        u64::from_str_radix(gas_price_hex.trim_start_matches("0x"), 16).unwrap_or(1_000_000_000);
 
     // 3. Convert amount to wei
     let amount_f64: f64 = amount.to_string().parse().unwrap_or(0.0);

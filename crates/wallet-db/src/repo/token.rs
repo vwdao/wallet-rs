@@ -34,12 +34,13 @@ impl<'a> TokenRepo<'a> {
         offset: i64,
     ) -> AppResult<(Vec<Token>, i64)> {
         let mut db = self.db.clone_inner();
-        let rows: Vec<Token> = Token::filter(Token::fields().chain_index().eq(chain_index.as_i64()))
-            .limit(limit as usize)
-            .offset(offset as usize)
-            .exec(&mut db)
-            .await
-            .map_err(|e| AppError::internal(e.to_string()))?;
+        let rows: Vec<Token> =
+            Token::filter(Token::fields().chain_index().eq(chain_index.as_i64()))
+                .limit(limit as usize)
+                .offset(offset as usize)
+                .exec(&mut db)
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))?;
         let total = Token::filter(Token::fields().chain_index().eq(chain_index.as_i64()))
             .count()
             .exec(&mut db)

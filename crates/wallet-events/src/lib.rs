@@ -159,7 +159,8 @@ impl EventBus for NatsEventBus {
 }
 
 struct NatsSub {
-    consumer: async_nats::jetstream::consumer::Consumer<async_nats::jetstream::consumer::pull::Config>,
+    consumer:
+        async_nats::jetstream::consumer::Consumer<async_nats::jetstream::consumer::pull::Config>,
     last_msg: Option<async_nats::jetstream::Message>,
 }
 

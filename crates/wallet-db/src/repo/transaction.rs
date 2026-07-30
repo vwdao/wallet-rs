@@ -36,15 +36,12 @@ impl<'a> TransactionRepo<'a> {
     ) -> AppResult<(Vec<Tx>, i64)> {
         let mut db = self.db.clone_inner();
         let rows: Vec<Tx> = Tx::filter(
-            Tx::fields()
-                .chain_index()
-                .eq(chain_index.as_i64())
-                .and(
-                    Tx::fields()
-                        .from_address()
-                        .eq(address)
-                        .or(Tx::fields().to_address().eq(address)),
-                ),
+            Tx::fields().chain_index().eq(chain_index.as_i64()).and(
+                Tx::fields()
+                    .from_address()
+                    .eq(address)
+                    .or(Tx::fields().to_address().eq(address)),
+            ),
         )
         .limit(limit as usize)
         .offset(offset as usize)
@@ -53,15 +50,12 @@ impl<'a> TransactionRepo<'a> {
         .map_err(|e| AppError::internal(e.to_string()))?;
 
         let total = Tx::filter(
-            Tx::fields()
-                .chain_index()
-                .eq(chain_index.as_i64())
-                .and(
-                    Tx::fields()
-                        .from_address()
-                        .eq(address)
-                        .or(Tx::fields().to_address().eq(address)),
-                ),
+            Tx::fields().chain_index().eq(chain_index.as_i64()).and(
+                Tx::fields()
+                    .from_address()
+                    .eq(address)
+                    .or(Tx::fields().to_address().eq(address)),
+            ),
         )
         .count()
         .exec(&mut db)

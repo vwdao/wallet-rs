@@ -83,7 +83,9 @@ impl RpcPool {
                 return Ok(&self.endpoints[i].url);
             }
         }
-        Err(AppError::Unavailable("all rpc endpoints open-circuit".into()))
+        Err(AppError::Unavailable(
+            "all rpc endpoints open-circuit".into(),
+        ))
     }
 
     pub fn mark_success(&self, url: &str) {

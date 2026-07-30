@@ -18,3 +18,4 @@ tracing = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 jiff = { workspace = true }
+tokio-postgres = "0.7"

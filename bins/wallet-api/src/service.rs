@@ -60,8 +60,8 @@ impl UserService for UserSvc {
         req: Request<ListAddressesRequest>,
     ) -> Result<Response<ListAddressesResponse>, Status> {
         let r = req.into_inner();
-        let user_id = Uuid::parse_str(&r.user_id)
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        let user_id =
+            Uuid::parse_str(&r.user_id).map_err(|e| Status::invalid_argument(e.to_string()))?;
         let ci = if r.chain_index == 0 {
             None
         } else {
@@ -116,11 +116,7 @@ impl TokenService for TokenSvc {
         let r = req.into_inner();
         let tokens: Vec<_> = r.tokens.iter().map(Address::new).collect();
         let items = wallet_domain::token::TokenService::new(&self.0)
-            .balances(
-                ChainIndex(r.chain_index),
-                &Address::new(r.wallet),
-                &tokens,
-            )
+            .balances(ChainIndex(r.chain_index), &Address::new(r.wallet), &tokens)
             .await?
             .into_iter()
             .map(|(token, amount)| BalanceItem {
@@ -248,9 +244,7 @@ impl NetworkService for NetworkSvc {
         let tip = wallet_domain::network::NetworkService::new(&self.0)
             .tip(ChainIndex(req.into_inner().chain_index))
             .await?;
-        Ok(Response::new(GetTipResponse {
-            block_number: tip,
-        }))
+        Ok(Response::new(GetTipResponse { block_number: tip }))
     }
 }
 
@@ -389,7 +383,9 @@ impl DappService for DappSvc {
     async fn get_dapp(&self, req: Request<GetDappRequest>) -> Result<Response<Dapp>, Status> {
         let id = Uuid::parse_str(&req.into_inner().id)
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
-        let d = wallet_domain::dapp::DappService::new(&self.0).get(id).await?;
+        let d = wallet_domain::dapp::DappService::new(&self.0)
+            .get(id)
+            .await?;
         Ok(Response::new(dapp_from_row(d)))
     }
 }
@@ -402,9 +398,7 @@ impl RentService for RentSvc {
     ) -> Result<Response<EstimateEnergyResponse>, Status> {
         let r = req.into_inner();
         let svc = wallet_domain::rent::RentService::new();
-        let e = svc
-            .estimate(&Address::new(r.address), r.energy)
-            .await?;
+        let e = svc.estimate(&Address::new(r.address), r.energy).await?;
         Ok(Response::new(EstimateEnergyResponse {
             price: e.price,
             duration_hours: e.duration_hours,
@@ -434,12 +428,15 @@ impl SolanaService for SolanaSvc {
         req: Request<GetAtaRequest>,
     ) -> Result<Response<GetAtaResponse>, Status> {
         let r = req.into_inner();
-        let sol_chain = self.0.chains.get(wallet_types::ChainIndex::SOL)
+        let sol_chain = self
+            .0
+            .chains
+            .get(wallet_types::ChainIndex::SOL)
             .map_err(|e| Status::internal(e.to_string()))?;
-        let (ata, exists) = sol_chain.ata_address_rpc(
-            &Address::new(r.owner),
-            &Address::new(r.mint),
-        ).await.map_err(|e| Status::internal(e.to_string()))?;
+        let (ata, exists) = sol_chain
+            .ata_address_rpc(&Address::new(r.owner), &Address::new(r.mint))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
         Ok(Response::new(GetAtaResponse {
             ata: ata.to_string(),
             exists,
@@ -451,17 +448,16 @@ impl SolanaService for SolanaSvc {
         req: Request<EnsureAtaRequest>,
     ) -> Result<Response<EnsureAtaResponse>, Status> {
         let r = req.into_inner();
-        let sol_chain = self.0.chains.get(wallet_types::ChainIndex::SOL)
+        let sol_chain = self
+            .0
+            .chains
+            .get(wallet_types::ChainIndex::SOL)
             .map_err(|e| Status::internal(e.to_string()))?;
-        let (ata, exists) = sol_chain.ata_address_rpc(
-            &Address::new(r.owner),
-            &Address::new(r.mint),
-        ).await.map_err(|e| Status::internal(e.to_string()))?;
-        let create_ix = if exists {
-            vec![]
-        } else {
-            vec![0u8]
-        };
+        let (ata, exists) = sol_chain
+            .ata_address_rpc(&Address::new(r.owner), &Address::new(r.mint))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let create_ix = if exists { vec![] } else { vec![0u8] };
         Ok(Response::new(EnsureAtaResponse {
             ata: ata.to_string(),
             create_ix,

@@ -4,6 +4,8 @@ use uuid::Uuid;
 use wallet_db::{ChainGatewayKey, ChainGatewayStats, GatewaySettings, RpcEndpoint};
 use wallet_error::AppError;
 
+use crate::free_rpc::{ChainSyncResult, FreeRpcSyncer};
+use crate::proxy;
 use crate::Gw;
 
 fn require_admin(
@@ -341,6 +343,8 @@ async fn create_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
+        proxy::validate_endpoint_url(&body.url)?;
+
         let mut db = st.db.clone_inner();
         let row = toasty::create!(RpcEndpoint {
             chain_index: body.chain_index,
@@ -384,6 +388,10 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .parse_json()
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
+
+        if let Some(url) = &body.url {
+            proxy::validate_endpoint_url(url)?;
+        }
 
         let mut db = st.db.clone_inner();
         let mut row: RpcEndpoint = RpcEndpoint::get_by_id(&mut db, &id)
@@ -463,6 +471,36 @@ async fn delete_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
     .await;
     match result {
         Ok(()) => res.render(Json(serde_json::json!({"ok": true}))),
+        Err(e) => res.render(e),
+    }
+}
+
+#[handler]
+async fn sync_free_endpoints(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<Vec<ChainSyncResult>>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, &st.admin_key)?;
+
+        let syncer = FreeRpcSyncer::new(st.db.clone(), st.http.clone());
+        let chain_index: Option<i64> = req.query("chain_index");
+
+        let results = if let Some(chain_index) = chain_index {
+            vec![syncer.sync_chain(chain_index).await?]
+        } else {
+            syncer.sync_all_enabled().await?
+        };
+
+        if !results.is_empty() {
+            st.router.invalidate_all();
+        }
+
+        Ok(Json(results))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
         Err(e) => res.render(e),
     }
 }
@@ -687,6 +725,7 @@ pub fn admin_router() -> Router {
                 .get(list_endpoints)
                 .post(create_endpoint),
         )
+        .push(Router::with_path("endpoints/sync-free").post(sync_free_endpoints))
         .push(
             Router::with_path("endpoints/{id}")
                 .put(update_endpoint)

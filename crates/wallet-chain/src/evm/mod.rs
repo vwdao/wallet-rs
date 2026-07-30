@@ -9,7 +9,7 @@ use std::sync::Arc;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
 use wallet_types::{
-    Address, Amount, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, TxStatus, ChainIndex,
+    Address, Amount, ChainIndex, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, TxStatus,
 };
 
 #[derive(Debug)]
@@ -94,9 +94,7 @@ impl TokenBalance for EvmChain {
         let decimals = decimals_result
             .ok()
             .and_then(|r| r.as_str().map(|s| s.to_string()))
-            .and_then(|hex| {
-                u32::from_str_radix(hex.trim_start_matches("0x"), 16).ok()
-            })
+            .and_then(|hex| u32::from_str_radix(hex.trim_start_matches("0x"), 16).ok())
             .unwrap_or(18);
 
         // balanceOf(address) selector 0x70a08231
@@ -148,14 +146,8 @@ impl BlockSource for EvmChain {
             .unwrap_or_default();
         let mut out = Vec::with_capacity(txs.len());
         for tx in txs {
-            let hash = tx
-                .get("hash")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default();
-            let from = tx
-                .get("from")
-                .and_then(|v| v.as_str())
-                .map(Address::new);
+            let hash = tx.get("hash").and_then(|v| v.as_str()).unwrap_or_default();
+            let from = tx.get("from").and_then(|v| v.as_str()).map(Address::new);
             let to = tx.get("to").and_then(|v| v.as_str()).map(Address::new);
             let value_hex = tx.get("value").and_then(|v| v.as_str()).unwrap_or("0x0");
             let value = u128::from_str_radix(value_hex.trim_start_matches("0x"), 16).unwrap_or(0);
@@ -188,7 +180,9 @@ impl GasEstimator for EvmChain {
         let gas_limit = u64::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap_or(21_000);
 
         // Fetch EIP-1559 fee data
-        let fee_result = self.rpc("eth_feeHistory", json!([3, "latest", [25, 50, 75]])).await;
+        let fee_result = self
+            .rpc("eth_feeHistory", json!([3, "latest", [25, 50, 75]]))
+            .await;
         let (max_fee, max_priority) = match fee_result {
             Ok(fee) => {
                 let base_fee = fee
@@ -227,10 +221,7 @@ impl GasEstimator for EvmChain {
 impl NonceProvider for EvmChain {
     async fn nonce(&self, addr: &Address) -> AppResult<u64> {
         let result = self
-            .rpc(
-                "eth_getTransactionCount",
-                json!([addr.as_str(), "pending"]),
-            )
+            .rpc("eth_getTransactionCount", json!([addr.as_str(), "pending"]))
             .await?;
         let hex = result.as_str().unwrap_or("0x0");
         u64::from_str_radix(hex.trim_start_matches("0x"), 16)

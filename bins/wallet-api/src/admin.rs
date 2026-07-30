@@ -14,9 +14,9 @@ use wallet_proto::wallet::v1::admin::admin_transaction_service_server::AdminTran
 use wallet_proto::wallet::v1::admin::admin_user_service_server::AdminUserService;
 use wallet_proto::wallet::v1::admin::*;
 use wallet_proto::wallet::v1::{
-    AppConfig, Dapp, Empty, GetAppConfigRequest, Guide, ListDappsRequest,
-    ListDappsResponse, ListGuidesRequest, ListGuidesResponse, ListNetworksRequest,
-    ListNetworksResponse, ListTokensRequest, ListTokensResponse, Network, PageMeta, Token,
+    AppConfig, Dapp, Empty, GetAppConfigRequest, Guide, ListDappsRequest, ListDappsResponse,
+    ListGuidesRequest, ListGuidesResponse, ListNetworksRequest, ListNetworksResponse,
+    ListTokensRequest, ListTokensResponse, Network, PageMeta, Token,
 };
 use wallet_types::ChainIndex;
 
@@ -38,10 +38,13 @@ impl AdminUserService for AdminUserSvc {
         &self,
         req: Request<ListUsersRequest>,
     ) -> Result<Response<ListUsersResponse>, Status> {
-        let p = req.into_inner().pagination.unwrap_or(wallet_proto::wallet::v1::Pagination {
-            page: 1,
-            page_size: 20,
-        });
+        let p = req
+            .into_inner()
+            .pagination
+            .unwrap_or(wallet_proto::wallet::v1::Pagination {
+                page: 1,
+                page_size: 20,
+            });
         let page = p.page.max(1);
         let page_size = p.page_size.clamp(1, 100);
         let (rows, total) = UserRepo::new(&self.0.db)
@@ -129,16 +132,14 @@ impl AdminTokenService for AdminTokenSvc {
         req: Request<ListTokensRequest>,
     ) -> Result<Response<ListTokensResponse>, Status> {
         let r = req.into_inner();
-        let p = r.pagination.unwrap_or(wallet_proto::wallet::v1::Pagination {
-            page: 1,
-            page_size: 20,
-        });
+        let p = r
+            .pagination
+            .unwrap_or(wallet_proto::wallet::v1::Pagination {
+                page: 1,
+                page_size: 20,
+            });
         let (items, total) = wallet_domain::token::TokenService::new(&self.0)
-            .list(
-                ChainIndex(r.chain_index),
-                p.page.max(1),
-                p.page_size.max(1),
-            )
+            .list(ChainIndex(r.chain_index), p.page.max(1), p.page_size.max(1))
             .await?;
         Ok(Response::new(ListTokensResponse {
             items: items.into_iter().map(token_from_row).collect(),
@@ -177,10 +178,13 @@ impl AdminDappService for AdminDappSvc {
         &self,
         req: Request<ListDappsRequest>,
     ) -> Result<Response<ListDappsResponse>, Status> {
-        let p = req.into_inner().pagination.unwrap_or(wallet_proto::wallet::v1::Pagination {
-            page: 1,
-            page_size: 20,
-        });
+        let p = req
+            .into_inner()
+            .pagination
+            .unwrap_or(wallet_proto::wallet::v1::Pagination {
+                page: 1,
+                page_size: 20,
+            });
         let (items, total) = wallet_domain::dapp::DappService::new(&self.0)
             .list(p.page.max(1), p.page_size.max(1))
             .await?;
@@ -368,12 +372,11 @@ impl AdminCmsService for AdminCmsSvc {
     ) -> Result<Response<AppConfig>, Status> {
         let platform = req.into_inner().platform;
         let mut db = self.0.db.clone_inner();
-        let rows: Vec<wallet_db::AppConfig> = wallet_db::AppConfig::filter(
-            wallet_db::AppConfig::fields().platform().eq(&platform),
-        )
-        .exec(&mut db)
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
+        let rows: Vec<wallet_db::AppConfig> =
+            wallet_db::AppConfig::filter(wallet_db::AppConfig::fields().platform().eq(&platform))
+                .exec(&mut db)
+                .await
+                .map_err(|e| Status::internal(e.to_string()))?;
 
         let row = rows
             .into_iter()
@@ -437,24 +440,25 @@ impl AdminCmsService for AdminCmsSvc {
     ) -> Result<Response<ListGuidesResponse>, Status> {
         let r = req.into_inner();
         let locale = r.locale;
-        let p = r.pagination.unwrap_or(wallet_proto::wallet::v1::Pagination {
-            page: 1,
-            page_size: 20,
-        });
+        let p = r
+            .pagination
+            .unwrap_or(wallet_proto::wallet::v1::Pagination {
+                page: 1,
+                page_size: 20,
+            });
         let page = p.page.max(1);
         let page_size = p.page_size.clamp(1, 100);
         let limit = page_size as usize;
         let offset = ((page - 1) * page_size) as usize;
 
         let mut db = self.0.db.clone_inner();
-        let rows: Vec<wallet_db::Guide> = wallet_db::Guide::filter(
-            wallet_db::Guide::fields().locale().eq(&locale),
-        )
-        .limit(limit)
-        .offset(offset)
-        .exec(&mut db)
-        .await
-        .map_err(|e| Status::internal(e.to_string()))?;
+        let rows: Vec<wallet_db::Guide> =
+            wallet_db::Guide::filter(wallet_db::Guide::fields().locale().eq(&locale))
+                .limit(limit)
+                .offset(offset)
+                .exec(&mut db)
+                .await
+                .map_err(|e| Status::internal(e.to_string()))?;
 
         let total: u64 = wallet_db::Guide::filter(wallet_db::Guide::fields().locale().eq(&locale))
             .count()

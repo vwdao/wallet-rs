@@ -7,7 +7,9 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
-use wallet_types::{Address, Amount, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, TxStatus, ChainIndex};
+use wallet_types::{
+    Address, Amount, ChainIndex, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash, TxStatus,
+};
 
 #[derive(Debug)]
 pub struct SolanaChain {
@@ -52,7 +54,11 @@ impl SolanaChain {
     /// Derive SPL Token Associated Token Account (ATA) address via RPC lookup.
     /// Uses getTokenAccountsByOwner to find existing ATA for a given mint.
     /// Returns (address, exists).
-    pub async fn ata_address_rpc(&self, owner: &Address, mint: &Address) -> AppResult<(Address, bool)> {
+    pub async fn ata_address_rpc(
+        &self,
+        owner: &Address,
+        mint: &Address,
+    ) -> AppResult<(Address, bool)> {
         let result = self
             .rpc(
                 "getTokenAccountsByOwner",
@@ -69,10 +75,7 @@ impl SolanaChain {
             .cloned()
             .unwrap_or_default();
         if let Some(first) = accounts.first() {
-            let pubkey = first
-                .get("pubkey")
-                .and_then(|p| p.as_str())
-                .unwrap_or("");
+            let pubkey = first.get("pubkey").and_then(|p| p.as_str()).unwrap_or("");
             return Ok((Address::new(pubkey), true));
         }
         let ata = Address::new(format!("ata:{}:{}", owner.as_str(), mint.as_str()));
@@ -195,7 +198,9 @@ impl BlockSource for SolanaChain {
                     if let Some(s) = k.as_str() {
                         Some(Address::new(s.to_string()))
                     } else {
-                        k.get("pubkey").and_then(|p| p.as_str()).map(|s| Address::new(s.to_string()))
+                        k.get("pubkey")
+                            .and_then(|p| p.as_str())
+                            .map(|s| Address::new(s.to_string()))
                     }
                 });
                 let from = fee_payer;
@@ -203,7 +208,9 @@ impl BlockSource for SolanaChain {
                     if let Some(s) = k.as_str() {
                         Some(Address::new(s.to_string()))
                     } else {
-                        k.get("pubkey").and_then(|p| p.as_str()).map(|s| Address::new(s.to_string()))
+                        k.get("pubkey")
+                            .and_then(|p| p.as_str())
+                            .map(|s| Address::new(s.to_string()))
                     }
                 });
                 NormalizedTx {
@@ -223,12 +230,7 @@ impl BlockSource for SolanaChain {
 #[async_trait]
 impl GasEstimator for SolanaChain {
     async fn estimate_gas(&self, _tx: &GasEstimateRequest) -> AppResult<GasEstimate> {
-        let result = self
-            .rpc(
-                "getRecentPrioritizationFees",
-                json!([]),
-            )
-            .await?;
+        let result = self.rpc("getRecentPrioritizationFees", json!([])).await?;
         let fees = result.as_array().cloned().unwrap_or_default();
         let avg_priority: u64 = if fees.is_empty() {
             5000

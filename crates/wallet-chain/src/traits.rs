@@ -1,8 +1,6 @@
 use async_trait::async_trait;
 use wallet_error::AppResult;
-use wallet_types::{
-    Address, Amount, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash,
-};
+use wallet_types::{Address, Amount, GasEstimate, GasEstimateRequest, NormalizedTx, TxHash};
 
 #[async_trait]
 pub trait BalanceReader: Send + Sync {

@@ -66,7 +66,11 @@ impl RentService {
 
     /// Query a TRON account's current staked energy from the chain.
     async fn fetch_account_energy(&self, address: &Address) -> AppResult<u64> {
-        let url = format!("{}/v2/account/energy?address={}", RENT_API_BASE, address.as_str());
+        let url = format!(
+            "{}/v2/account/energy?address={}",
+            RENT_API_BASE,
+            address.as_str()
+        );
         let resp = self
             .http
             .get(&url)
@@ -102,17 +106,18 @@ impl RentService {
         // 2. Select best offer (lowest price)
         let best = offers
             .into_iter()
-            .min_by_key(|o| o.get("price_sun").and_then(|p| p.as_u64()).unwrap_or(u64::MAX))
+            .min_by_key(|o| {
+                o.get("price_sun")
+                    .and_then(|p| p.as_u64())
+                    .unwrap_or(u64::MAX)
+            })
             .ok_or_else(|| AppError::Unavailable("no rental offers available".into()))?;
 
         let provider = best
             .get("provider")
             .and_then(|p| p.as_str())
             .unwrap_or("unknown");
-        let price_sun = best
-            .get("price_sun")
-            .and_then(|p| p.as_u64())
-            .unwrap_or(0);
+        let price_sun = best.get("price_sun").and_then(|p| p.as_u64()).unwrap_or(0);
 
         // 3. Submit order to provider API
         let order_resp = self
@@ -158,11 +163,7 @@ impl RentService {
         }
     }
 
-    async fn fetch_rental_offers(
-        &self,
-        energy: u64,
-        duration_hours: u64,
-    ) -> AppResult<Vec<Value>> {
+    async fn fetch_rental_offers(&self, energy: u64, duration_hours: u64) -> AppResult<Vec<Value>> {
         // Query multiple rental providers
         let mut offers = Vec::new();
 
@@ -191,11 +192,7 @@ impl RentService {
         Ok(offers)
     }
 
-    async fn fetch_tron_energy_offer(
-        &self,
-        energy: u64,
-        duration_hours: u64,
-    ) -> AppResult<Value> {
+    async fn fetch_tron_energy_offer(&self, energy: u64, duration_hours: u64) -> AppResult<Value> {
         let url = "https://api.tronenergy.io/v1/offer";
         let body = json!({
             "energy": energy,
@@ -209,9 +206,10 @@ impl RentService {
             .await
             .map_err(|e| AppError::Unavailable(format!("tronenergy offer: {e}")))?;
         if resp.status().is_success() {
-            let v: Value = resp.json().await.map_err(|e| {
-                AppError::Unavailable(format!("tronenergy offer parse: {e}"))
-            })?;
+            let v: Value = resp
+                .json()
+                .await
+                .map_err(|e| AppError::Unavailable(format!("tronenergy offer parse: {e}")))?;
             Ok(json!({
                 "provider": "tronenergy",
                 "price_sun": v.get("price_sun").and_then(|p| p.as_u64()).unwrap_or(0),
@@ -237,9 +235,10 @@ impl RentService {
             .await
             .map_err(|e| AppError::Unavailable(format!("tronstake offer: {e}")))?;
         if resp.status().is_success() {
-            let v: Value = resp.json().await.map_err(|e| {
-                AppError::Unavailable(format!("tronstake offer parse: {e}"))
-            })?;
+            let v: Value = resp
+                .json()
+                .await
+                .map_err(|e| AppError::Unavailable(format!("tronstake offer parse: {e}")))?;
             Ok(json!({
                 "provider": "tronstake",
                 "price_sun": v.get("cost").and_then(|p| p.as_u64()).unwrap_or(0),

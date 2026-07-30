@@ -2,9 +2,7 @@ use crate::AppState;
 use wallet_chain::{GasEstimator, TxBroadcaster};
 use wallet_db::{TransactionRepo, TxRow};
 use wallet_error::{AppError, AppResult};
-use wallet_types::{
-    Address, GasEstimate, GasEstimateRequest, Amount, ChainIndex, TxHash,
-};
+use wallet_types::{Address, Amount, ChainIndex, GasEstimate, GasEstimateRequest, TxHash};
 
 pub struct TransactionService<'a> {
     pub state: &'a AppState,

@@ -29,7 +29,10 @@ fn normalize_tx(
         Some(ChainFamily::Tron) => normalize_tron_tx(height, idx, &mut tx),
         Some(ChainFamily::UtxoOther) => normalize_utxo_tx(height, idx, &mut tx),
         None => {
-            tracing::warn!(chain_index = chain_index.as_i64(), "unknown chain family, skipping normalization");
+            tracing::warn!(
+                chain_index = chain_index.as_i64(),
+                "unknown chain family, skipping normalization"
+            );
         }
     }
     tx
@@ -39,16 +42,10 @@ fn normalize_tx(
 fn normalize_evm_tx(_chain_index: ChainIndex, _idx: usize, tx: &mut NormalizedTx) {
     let raw = &tx.raw;
     if tx.from.is_none() {
-        tx.from = raw
-            .get("from")
-            .and_then(|v| v.as_str())
-            .map(Address::new);
+        tx.from = raw.get("from").and_then(|v| v.as_str()).map(Address::new);
     }
     if tx.to.is_none() {
-        tx.to = raw
-            .get("to")
-            .and_then(|v| v.as_str())
-            .map(Address::new);
+        tx.to = raw.get("to").and_then(|v| v.as_str()).map(Address::new);
     }
     if let Some(val_hex) = raw.get("value").and_then(|v| v.as_str()) {
         if let Ok(raw_val) = u128::from_str_radix(val_hex.trim_start_matches("0x"), 16) {

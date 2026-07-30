@@ -25,18 +25,9 @@ pub async fn start(
         match sub.next().await {
             Ok(Some(env)) => {
                 let v = &env.payload;
-                let target_chain = v
-                    .get("chain_index")
-                    .and_then(|c| c.as_i64())
-                    .unwrap_or(0);
-                let from_block = v
-                    .get("from_block")
-                    .and_then(|b| b.as_u64())
-                    .unwrap_or(0);
-                let to_block = v
-                    .get("to_block")
-                    .and_then(|b| b.as_u64())
-                    .unwrap_or(0);
+                let target_chain = v.get("chain_index").and_then(|c| c.as_i64()).unwrap_or(0);
+                let from_block = v.get("from_block").and_then(|b| b.as_u64()).unwrap_or(0);
+                let to_block = v.get("to_block").and_then(|b| b.as_u64()).unwrap_or(0);
 
                 if target_chain != chain_index.as_i64() {
                     info!(
@@ -78,7 +69,8 @@ pub async fn start(
                                     error!(height, error = %e, "reindex: insert failed");
                                 }
                             }
-                            if let Err(e) = report_txs(bus.as_ref(), chain_index, &normalized).await {
+                            if let Err(e) = report_txs(bus.as_ref(), chain_index, &normalized).await
+                            {
                                 error!(height, error = %e, "reindex: report failed");
                             }
                             reindexed += 1;
@@ -93,10 +85,7 @@ pub async fn start(
                 }
 
                 // Update sync cursor to the reindexed range
-                if let Err(e) = SyncCursorRepo::new(&db)
-                    .set(chain_index, to_block)
-                    .await
-                {
+                if let Err(e) = SyncCursorRepo::new(&db).set(chain_index, to_block).await {
                     error!(error = %e, "reindex: cursor update failed");
                 }
 

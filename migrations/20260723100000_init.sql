@@ -1,4 +1,4 @@
-!-- Add migration metadata used by sqlx. -->
+-- Initial schema
 
 CREATE TABLE IF NOT EXISTS networks (
     chain_index BIGINT PRIMARY KEY,

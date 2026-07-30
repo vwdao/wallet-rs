@@ -3,8 +3,8 @@ mod middleware;
 mod types;
 
 use clap::Parser;
-use salvo::prelude::*;
 use salvo::cors::Cors;
+use salvo::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
@@ -165,8 +165,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         use salvo::cors::AllowOrigin;
         let origins: Vec<String> = cfg.allowed_origins.clone();
         Cors::new()
-            .allow_origin(AllowOrigin::list(origins.iter().filter_map(|o| o.parse().ok())))
-            .allow_methods([salvo::http::Method::GET, salvo::http::Method::POST, salvo::http::Method::OPTIONS])
+            .allow_origin(AllowOrigin::list(
+                origins.iter().filter_map(|o| o.parse().ok()),
+            ))
+            .allow_methods([
+                salvo::http::Method::GET,
+                salvo::http::Method::POST,
+                salvo::http::Method::OPTIONS,
+            ])
             .allow_headers(salvo::cors::AllowHeaders::mirror_request())
     };
 

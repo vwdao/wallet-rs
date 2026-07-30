@@ -5,9 +5,21 @@ use std::time::Duration;
 use wallet_domain::AppState;
 
 const SYMBOLS: &[&str] = &[
-    "ETHUSDT", "BTCUSDT", "BNBUSDT", "SOLUSDT", "TRXUSDT",
-    "DOGEUSDT", "ADAUSDT", "AVAXUSDT", "DOTUSDT", "MATICUSDT",
-    "LINKUSDT", "UNIUSDT", "ATOMUSDT", "LTCUSDT", "XRPUSDT",
+    "ETHUSDT",
+    "BTCUSDT",
+    "BNBUSDT",
+    "SOLUSDT",
+    "TRXUSDT",
+    "DOGEUSDT",
+    "ADAUSDT",
+    "AVAXUSDT",
+    "DOTUSDT",
+    "MATICUSDT",
+    "LINKUSDT",
+    "UNIUSDT",
+    "ATOMUSDT",
+    "LTCUSDT",
+    "XRPUSDT",
 ];
 
 #[derive(clickhouse::Row, serde::Serialize)]

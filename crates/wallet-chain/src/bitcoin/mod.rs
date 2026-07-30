@@ -1,13 +1,13 @@
 use crate::provider::RpcPool;
 use crate::traits::{BalanceReader, BlockSource, GasEstimator, TokenBalance, TxBroadcaster};
-use wallet_types::{GasEstimate, GasEstimateRequest};
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
-use wallet_types::{Address, Amount, NormalizedTx, TxHash, TxStatus, ChainIndex};
+use wallet_types::{Address, Amount, ChainIndex, NormalizedTx, TxHash, TxStatus};
+use wallet_types::{GasEstimate, GasEstimateRequest};
 
 #[derive(Debug)]
 pub struct BitcoinChain {
@@ -54,10 +54,7 @@ impl BitcoinChain {
 impl BalanceReader for BitcoinChain {
     async fn native_balance(&self, addr: &Address) -> AppResult<Amount> {
         let v = self
-            .rpc(
-                "getreceivedbyaddress",
-                json!([addr.as_str(), 0]),
-            )
+            .rpc("getreceivedbyaddress", json!([addr.as_str(), 0]))
             .await?;
         let btc = v.as_f64().unwrap_or(0.0);
         let sats = (btc * 1e8) as u64;
@@ -77,9 +74,7 @@ impl TokenBalance for BitcoinChain {
 impl TxBroadcaster for BitcoinChain {
     async fn send_raw(&self, raw: &[u8]) -> AppResult<TxHash> {
         let hex_str = hex::encode(raw);
-        let result = self
-            .rpc("sendrawtransaction", json!([hex_str]))
-            .await?;
+        let result = self.rpc("sendrawtransaction", json!([hex_str])).await?;
         let hash = result
             .as_str()
             .ok_or_else(|| AppError::internal("missing txid"))?;
@@ -101,12 +96,7 @@ impl BlockSource for BitcoinChain {
             .as_str()
             .unwrap_or("")
             .to_string();
-        let block = self
-            .rpc(
-                "getblock",
-                json!([hash, 2]),
-            )
-            .await?;
+        let block = self.rpc("getblock", json!([hash, 2])).await?;
         let txs = block
             .get("tx")
             .and_then(|t| t.as_array())
@@ -154,13 +144,8 @@ impl BlockSource for BitcoinChain {
 #[async_trait]
 impl GasEstimator for BitcoinChain {
     async fn estimate_gas(&self, _tx: &GasEstimateRequest) -> AppResult<GasEstimate> {
-        let v = self
-            .rpc("estimatesmartfee", json!([6]))
-            .await?;
-        let feerate = v
-            .get("feerate")
-            .and_then(|f| f.as_f64())
-            .unwrap_or(0.0001);
+        let v = self.rpc("estimatesmartfee", json!([6])).await?;
+        let feerate = v.get("feerate").and_then(|f| f.as_f64()).unwrap_or(0.0001);
         // Convert BTC/kB to sat/vB (divide by 100_000_000/1000 = 100_000)
         let sat_per_vb = (feerate * 1e8 / 1000.0) as u128;
         Ok(GasEstimate {

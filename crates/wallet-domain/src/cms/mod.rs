@@ -31,12 +31,11 @@ impl<'a> CmsService<'a> {
 
     pub async fn get_app_config(&self, platform: &str) -> AppResult<AppConfigRow> {
         let mut db = self.state.db.clone_inner();
-        let rows: Vec<AppConfigModel> = AppConfigModel::filter(
-            AppConfigModel::fields().platform().eq(platform),
-        )
-        .exec(&mut db)
-        .await
-        .map_err(|e| AppError::internal(e.to_string()))?;
+        let rows: Vec<AppConfigModel> =
+            AppConfigModel::filter(AppConfigModel::fields().platform().eq(platform))
+                .exec(&mut db)
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))?;
 
         match rows.into_iter().next() {
             Some(r) => {

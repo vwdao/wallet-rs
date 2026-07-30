@@ -196,7 +196,8 @@ pub struct TronPaymaster {
 impl Paymaster for TronPaymaster {
     async fn sponsor(&self, user: &Address, _payload: &[u8]) -> AppResult<SponsorResult> {
         // 1. Get latest block
-        let block_resp = tron_post(&self.http, &self.rpc_url, "/wallet/getnowblock", json!({})).await?;
+        let block_resp =
+            tron_post(&self.http, &self.rpc_url, "/wallet/getnowblock", json!({})).await?;
         let _block_num = block_resp
             .pointer("/block_header/raw_data/number")
             .and_then(|n| n.as_u64())
@@ -306,10 +307,7 @@ impl<'a> GasPoolService<'a> {
         Self { state }
     }
 
-    pub async fn get(
-        &self,
-        chain_index: ChainIndex,
-    ) -> AppResult<wallet_db::GasPoolRow> {
+    pub async fn get(&self, chain_index: ChainIndex) -> AppResult<wallet_db::GasPoolRow> {
         GasPoolRepo::new(&self.state.db)
             .get(chain_index)
             .await?
@@ -318,9 +316,7 @@ impl<'a> GasPoolService<'a> {
 
     pub async fn set_enabled(&self, chain_index: ChainIndex, enabled: bool) -> AppResult<()> {
         if enabled {
-            let pool = GasPoolRepo::new(&self.state.db)
-                .get(chain_index)
-                .await?;
+            let pool = GasPoolRepo::new(&self.state.db).get(chain_index).await?;
             let pool = pool.ok_or_else(|| AppError::NotFound(format!("gas pool {chain_index}")))?;
             if pool.hot_wallet.is_empty() || pool.cold_wallet.is_empty() {
                 return Err(AppError::InvalidArgument(
@@ -343,8 +339,8 @@ impl<'a> GasPoolService<'a> {
         if !pool.enabled {
             return Err(AppError::Unavailable("gas pool disabled".into()));
         }
-        let family = ChainFamily::for_index(chain_index)
-            .ok_or(AppError::ChainNotSupported(chain_index))?;
+        let family =
+            ChainFamily::for_index(chain_index).ok_or(AppError::ChainNotSupported(chain_index))?;
 
         // Resolve RPC URL from chain config
         let rpc_url = self
@@ -370,11 +366,7 @@ impl<'a> GasPoolService<'a> {
                 paymaster_address: pool.hot_wallet.clone(),
                 http: self.state.http.clone(),
             }),
-            _ => {
-                return Err(AppError::Unimplemented(
-                    "paymaster for chain family".into(),
-                ))
-            }
+            _ => return Err(AppError::Unimplemented("paymaster for chain family".into())),
         };
         pm.sponsor(user, payload).await
     }

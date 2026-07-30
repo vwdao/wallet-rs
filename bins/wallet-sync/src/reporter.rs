@@ -1,5 +1,5 @@
-use wallet_events::{EventBus, SUBJECT_TX_INDEXED};
 use wallet_error::AppResult;
+use wallet_events::{EventBus, SUBJECT_TX_INDEXED};
 use wallet_types::{ChainIndex, NormalizedTx};
 
 pub async fn report_txs(

@@ -11,11 +11,16 @@ use wallet_db::Db;
 use wallet_error::AppError;
 
 mod admin;
+mod free_rpc;
 mod health;
+mod protocol;
+mod proxy;
+mod proxy_ws;
 mod router;
 mod settings;
 mod state_injector;
 mod stats;
+mod transports;
 
 const ADMIN_HTML: &str = include_str!("../static/admin.html");
 
@@ -47,7 +52,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let cfg: ChainGatewayConfig = load_yaml(&args.config)?;
     let db = Db::connect(&cfg.database).await?;
-    let http = reqwest::Client::new();
+    let http = build_http_client();
 
     let (reloader, settings_handle) =
         settings::SettingsReloader::new(db.clone(), Duration::from_secs(10));
@@ -76,17 +81,69 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db.clone(),
         http.clone(),
         Duration::from_millis(loaded_cfg.health_check_interval_ms),
-        loaded_cfg.failure_threshold,
+        settings_handle.clone(),
     );
     health_checker.spawn();
 
+    {
+        let syncer = free_rpc::FreeRpcSyncer::new(db.clone(), http.clone());
+        let router = router.clone();
+        tokio::spawn(async move {
+            match syncer.sync_all_enabled().await {
+                Ok(results) => {
+                    let inserted: usize = results.iter().map(|r| r.inserted).sum();
+                    let updated: usize = results.iter().map(|r| r.updated).sum();
+                    if inserted > 0 || updated > 0 {
+                        router.invalidate_all();
+                    }
+                    tracing::info!(
+                        inserted,
+                        updated,
+                        chains = results.len(),
+                        "free rpc bootstrap finished"
+                    );
+                    for result in results {
+                        if let Some(message) = &result.message {
+                            tracing::info!(
+                                chain_index = result.chain_index,
+                                family = %result.family,
+                                source = %result.source,
+                                inserted = result.inserted,
+                                updated = result.updated,
+                                discovered = result.discovered,
+                                skipped = result.skipped,
+                                message = %message,
+                                "free rpc sync result"
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("free rpc bootstrap failed: {e}");
+                }
+            }
+        });
+    }
+
     let app = Router::new()
         .push(Router::with_path("healthz").get(healthz))
-        .push(Router::with_path("readyz").get(readyz))
-        .push(Router::with_path("rpc/{chain}").post(proxy_rpc))
-        .push(Router::with_path("admin").get(admin_ui))
-        .push(admin::admin_router())
-        .hoop(StateInjector(state));
+        .push(
+            Router::new()
+                .push(Router::with_path("readyz").get(readyz))
+                .push(
+                    Router::with_path("rpc/{chain}/{api_key}")
+                        .post(proxy_rpc)
+                        .get(proxy_ws::proxy_rpc_ws),
+                )
+                .push(
+                    Router::with_path("rpc/{chain}")
+                        .post(proxy_rpc)
+                        .get(proxy_ws::proxy_rpc_ws),
+                )
+                .push(Router::with_path("admin").get(admin_ui))
+                .push(admin::admin_router())
+                .hoop(StateInjector(state)),
+        );
 
     let addr: SocketAddr = cfg.listen.parse()?;
     tracing::info!("chain-gateway on {addr}");
@@ -135,45 +192,11 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .map_err(|_| AppError::internal("Gw state not inserted"))?;
 
         let cfg = st.settings.get();
-
-        let api_key = req
-            .headers()
-            .get("x-api-key")
-            .and_then(|v| v.to_str().ok())
-            .ok_or(AppError::Unauthorized)?
-            .to_string();
-
-        if cfg.global_rate_limit_per_min > 0 {
-            check_rate(&st.rate, "_global", cfg.global_rate_limit_per_min)?;
-        }
-
-        let mut db = st.db.clone_inner();
-        let mut key_row = wallet_db::ChainGatewayKey::filter_by_api_key(&api_key)
-            .get(&mut db)
-            .await
-            .map_err(|_| AppError::Forbidden)?;
-
-        if !key_row.enabled {
-            return Err(AppError::Forbidden);
-        }
-
-        check_rate(
-            &st.rate,
-            &api_key,
-            key_row.rate_limit_per_min.max(0) as usize,
-        )?;
-
-        let chain: String = req
-            .param("chain")
-            .ok_or_else(|| AppError::InvalidArgument("missing chain".into()))?;
-
-        let chain_index: i64 = chain
-            .parse()
-            .map_err(|_| AppError::InvalidArgument(format!("invalid chain index: {chain}")))?;
-
-        if !key_row.allowed_chains.is_empty() && !key_row.allowed_chains.contains(&chain_index) {
-            return Err(AppError::Forbidden);
-        }
+        let auth = proxy::authenticate(req, st).await?;
+        let api_key = auth.api_key.clone();
+        let chain_index = auth.chain_index;
+        let chain = auth.chain_name.clone();
+        let mut key_row = auth.key_row;
 
         let body: Value = req
             .parse_json()
@@ -183,14 +206,13 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         if cfg.log_requests {
             tracing::info!(
                 api_key = %api_key,
-                chain = chain_index,
+                chain = %chain,
+                chain_index,
                 method = body.get("method").and_then(|v| v.as_str()).unwrap_or("unknown"),
                 "proxy request"
             );
         }
 
-        // Keep the aggregate counter best-effort so a database hiccup does not
-        // turn an otherwise successful RPC request into a gateway error.
         let next_total_requests = key_row.total_requests.saturating_add(1);
         let mut counter_db = st.db.clone_inner();
         let _ = key_row
@@ -252,27 +274,11 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     }
 }
 
-fn check_rate(
-    map: &DashMap<String, Vec<Instant>>,
-    key: &str,
-    limit: usize,
-) -> Result<(), AppError> {
-    if limit == 0 {
-        return Ok(());
-    }
-    let now = Instant::now();
-    let mut entry = map.entry(key.to_string()).or_default();
-    entry.retain(|t| now.duration_since(*t) < Duration::from_secs(60));
-    if entry.len() >= limit {
-        return Err(AppError::TooManyRequests);
-    }
-    entry.push(now);
-    if map.len() > 1000 {
-        map.retain(|_, v| {
-            !v.is_empty()
-                && v.iter()
-                    .any(|t| now.duration_since(*t) < Duration::from_secs(120))
-        });
-    }
-    Ok(())
+fn build_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        // RPC calls must reach endpoints directly; honoring HTTP_PROXY here
+        // can stall requests for rpc_timeout_secs * max_retries.
+        .no_proxy()
+        .build()
+        .expect("failed to build HTTP client")
 }

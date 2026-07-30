@@ -4287,7 +4287,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "tokio-tungstenite",
+ "tokio-tungstenite 0.30.0",
  "tower 0.5.3",
  "tracing",
  "ulid",
@@ -5430,6 +5430,18 @@ dependencies = [
 
 [[package]]
 name = "tokio-tungstenite"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a9daff607c6d2bf6c16fd681ccb7eecc83e4e2cdc1ca067ffaadfca5de7f084"
+dependencies = [
+ "futures-util",
+ "log",
+ "tokio",
+ "tungstenite 0.26.2",
+]
+
+[[package]]
+name = "tokio-tungstenite"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17a073bfed563fa236697a068031408a93cd9522e08abf9933ead3e73411bd71"
@@ -5437,7 +5449,7 @@ dependencies = [
  "futures-util",
  "log",
  "tokio",
- "tungstenite",
+ "tungstenite 0.30.0",
 ]
 
 [[package]]
@@ -5717,6 +5729,23 @@ checksum = "9fe58ebd5edd976e0fe0f8a14d2a04b7c81ef153ea9a54eebc42e67c2c23b4e5"
 dependencies = [
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tungstenite"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4793cb5e56680ecbb1d843515b23b6de9a75eb04b66643e256a396d43be33c13"
+dependencies = [
+ "bytes",
+ "data-encoding",
+ "http",
+ "httparse",
+ "log",
+ "rand 0.9.5",
+ "sha1",
+ "thiserror 2.0.19",
+ "utf-8",
 ]
 
 [[package]]
@@ -6068,6 +6097,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "utf-8"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
 name = "utf16_iter"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6220,8 +6255,11 @@ dependencies = [
 name = "wallet-chain-gateway"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "clap",
  "dashmap",
+ "futures",
+ "http",
  "jiff",
  "parking_lot",
  "rand 0.8.7",
@@ -6231,8 +6269,12 @@ dependencies = [
  "serde_json",
  "toasty",
  "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.26.2",
+ "tonic",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
  "wallet-config",
  "wallet-db",
@@ -6262,6 +6304,7 @@ dependencies = [
  "serde_json",
  "toasty",
  "tokio",
+ "tokio-postgres",
  "tracing",
  "uuid",
  "wallet-config",
