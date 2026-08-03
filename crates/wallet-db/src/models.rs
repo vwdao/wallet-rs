@@ -299,6 +299,8 @@ pub struct ChainGatewayStats {
     #[index]
     pub chain_index: i64,
 
+    pub client_ip: Option<String>,
+
     pub method: Option<String>,
 
     pub status_code: i32,

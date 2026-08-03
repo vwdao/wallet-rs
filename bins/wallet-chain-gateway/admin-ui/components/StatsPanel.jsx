@@ -1,43 +1,59 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { chainName } from '../lib/chains.js'
+import { CHAIN_OPTIONS, chainName } from '../lib/chains.js'
 import { StatsChart } from './StatsChart.jsx'
+import { IpStatsChart } from './IpStatsChart.jsx'
 import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
 import { Empty } from './ui/Empty.jsx'
 
 const RANGES = ['15m', '1h', '24h', '7d', '30d']
 
+function withChainQuery(path, chainIndex) {
+  if (chainIndex === '' || chainIndex == null) return path
+  const joiner = path.includes('?') ? '&' : '?'
+  return `${path}${joiner}chain_index=${encodeURIComponent(chainIndex)}`
+}
+
 export function StatsPanel({ api }) {
   const [range, setRange] = useState('1h')
+  const [chainIndex, setChainIndex] = useState('')
   const [stats, setStats] = useState([])
   const [series, setSeries] = useState({ points: [], bucket_seconds: 300 })
+  const [byIp, setByIp] = useState({ items: [] })
   const [tableLoading, setTableLoading] = useState(true)
   const [chartLoading, setChartLoading] = useState(true)
+  const [ipChartLoading, setIpChartLoading] = useState(true)
   const [tableError, setTableError] = useState('')
   const [chartError, setChartError] = useState('')
+  const [ipChartError, setIpChartError] = useState('')
   const seriesRequest = useRef(0)
+  const ipRequest = useRef(0)
 
   const loadTable = useCallback(async () => {
     setTableLoading(true)
     setTableError('')
     try {
-      const data = await api('/admin/stats')
+      const data = await api(withChainQuery('/admin/stats', chainIndex))
       setStats(Array.isArray(data) ? data : [])
     } catch (loadError) {
       setTableError(loadError.message || '加载统计数据失败')
     } finally {
       setTableLoading(false)
     }
-  }, [api])
+  }, [api, chainIndex])
 
   const loadSeries = useCallback(async () => {
     const requestId = ++seriesRequest.current
     setChartLoading(true)
     setChartError('')
     try {
-      const data = await api(`/admin/stats/series?range=${encodeURIComponent(range)}`)
+      const path = withChainQuery(
+        `/admin/stats/series?range=${encodeURIComponent(range)}`,
+        chainIndex,
+      )
+      const data = await api(path)
       if (requestId === seriesRequest.current) {
         setSeries(data && typeof data === 'object' ? data : { points: [], bucket_seconds: 300 })
       }
@@ -48,7 +64,29 @@ export function StatsPanel({ api }) {
     } finally {
       if (requestId === seriesRequest.current) setChartLoading(false)
     }
-  }, [api, range])
+  }, [api, range, chainIndex])
+
+  const loadByIp = useCallback(async () => {
+    const requestId = ++ipRequest.current
+    setIpChartLoading(true)
+    setIpChartError('')
+    try {
+      const path = withChainQuery(
+        `/admin/stats/by-ip?range=${encodeURIComponent(range)}`,
+        chainIndex,
+      )
+      const data = await api(path)
+      if (requestId === ipRequest.current) {
+        setByIp(data && typeof data === 'object' ? data : { items: [] })
+      }
+    } catch (loadError) {
+      if (requestId === ipRequest.current) {
+        setIpChartError(loadError.message || '加载 IP 统计失败')
+      }
+    } finally {
+      if (requestId === ipRequest.current) setIpChartLoading(false)
+    }
+  }, [api, range, chainIndex])
 
   useEffect(() => {
     loadTable()
@@ -57,6 +95,10 @@ export function StatsPanel({ api }) {
   useEffect(() => {
     loadSeries()
   }, [loadSeries])
+
+  useEffect(() => {
+    loadByIp()
+  }, [loadByIp])
 
   const summary = useMemo(() => {
     const totalRequests = stats.reduce((sum, row) => sum + Number(row.total_requests || 0), 0)
@@ -72,15 +114,39 @@ export function StatsPanel({ api }) {
     }
   }, [stats])
 
+  const chainChoices = useMemo(() => {
+    const fromData = [...new Set(stats.map((row) => Number(row.chain_index)).filter(Number.isFinite))]
+    const known = new Map(CHAIN_OPTIONS.map((item) => [item.id, item]))
+    for (const id of fromData) {
+      if (!known.has(id)) known.set(id, { id, name: chainName(id) })
+    }
+    return [...known.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [stats])
+
   async function refresh() {
-    await Promise.allSettled([loadTable(), loadSeries()])
+    await Promise.allSettled([loadTable(), loadSeries(), loadByIp()])
   }
 
   return (
     <>
       <div className="toolbar">
         <h2>请求统计</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="stats-filters">
+          <label className="stats-filter">
+            <span>链</span>
+            <select
+              value={chainIndex}
+              onChange={(event) => setChainIndex(event.target.value)}
+              aria-label="按链筛选"
+            >
+              <option value="">全部链</option>
+              {chainChoices.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name} ({item.id})
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="range-switch" aria-label="统计时间范围">
             {RANGES.map((value) => (
               <button
@@ -98,13 +164,15 @@ export function StatsPanel({ api }) {
         </div>
       </div>
 
-      {tableError || chartError ? (
+      {tableError || chartError || ipChartError ? (
         <div className="alert danger" role="alert">
-          {[tableError, chartError].filter(Boolean).join('；')}
+          {[tableError, chartError, ipChartError].filter(Boolean).join('；')}
         </div>
       ) : null}
 
       <StatsChart data={series} loading={chartLoading} />
+
+      <IpStatsChart data={byIp} loading={ipChartLoading} />
 
       {!tableLoading && stats.length ? (
         <div className="cards">

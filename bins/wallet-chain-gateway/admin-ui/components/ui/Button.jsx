@@ -4,6 +4,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   loading = false,
+  loadingText = '保存中…',
   disabled = false,
   onClick,
   children,
@@ -26,7 +27,7 @@ export function Button({
       onClick={onClick}
       {...props}
     >
-      {loading ? '保存中…' : children}
+      {loading ? loadingText : children}
     </button>
   )
 }

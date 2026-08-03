@@ -35,6 +35,7 @@ pub async fn proxy_rpc_ws(
     let chain_index = auth.chain_index;
     let user_tier = auth.key_row.allowed_tier.clone();
     let api_key = auth.api_key.clone();
+    let client_ip = req.remote_addr().ip().map(|ip| ip.to_string());
 
     let selection = match st
         .router
@@ -43,6 +44,7 @@ pub async fn proxy_rpc_ws(
             method,
             &user_tier,
             cfg.max_block_lag.max(0),
+            true,
         )
         .await
     {
@@ -89,26 +91,28 @@ pub async fn proxy_rpc_ws(
 
     WebSocketUpgrade::new()
         .upgrade(req, res, move |ws| async move {
+            stats.record(stats::StatsEvent {
+                api_key: api_key.clone(),
+                chain_index,
+                client_ip: client_ip.clone(),
+                method: method_owned.clone(),
+                status_code: 101,
+                latency_ms: 0,
+                error_msg: None,
+            });
             let result = crate::transports::tunnel(ws, &endpoint_url, Some(protocol), &headers)
                 .await;
             let latency = start.elapsed().as_millis() as i32;
             match &result {
                 Ok(()) => {
                     router.mark_success(&endpoint_url);
-                    stats.record(stats::StatsEvent {
-                        api_key: api_key.clone(),
-                        chain_index,
-                        method: method_owned.clone(),
-                        status_code: 101,
-                        latency_ms: latency,
-                        error_msg: None,
-                    });
                 }
                 Err(e) => {
                     router.mark_failure(&endpoint_url);
                     stats.record(stats::StatsEvent {
                         api_key,
                         chain_index,
+                        client_ip: client_ip.clone(),
                         method: method_owned,
                         status_code: 503,
                         latency_ms: latency,

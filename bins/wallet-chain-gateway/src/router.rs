@@ -155,6 +155,7 @@ impl RpcRouter {
         method: Option<&str>,
         user_tier: &str,
         max_block_lag: i64,
+        require_ws_tunnel: bool,
     ) -> AppResult<SelectedEndpoint> {
         let all_eps = self.get_endpoints(chain_index).await?;
         if all_eps.is_empty() {
@@ -171,6 +172,13 @@ impl RpcRouter {
         let filtered: Vec<&CachedEndpoint> = all_eps
             .iter()
             .filter(|ep| {
+                if require_ws_tunnel
+                    && !parse_endpoint_url_with(&ep.url, ep.protocol)
+                        .map(|(p, _)| p.supports_ws_tunnel())
+                        .unwrap_or(false)
+                {
+                    return false;
+                }
                 if !self.is_tier_allowed(&ep.tier, user_tier) {
                     return false;
                 }
@@ -287,7 +295,7 @@ impl RpcRouter {
         let mut last_err = None;
         for _ in 0..max_retries.max(1) {
             let selection = match self
-                .select_endpoint(chain_index, method, user_tier, max_block_lag.max(0))
+                .select_endpoint(chain_index, method, user_tier, max_block_lag.max(0), false)
                 .await
             {
                 Ok(s) => s,

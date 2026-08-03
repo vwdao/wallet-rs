@@ -2,7 +2,7 @@
 
 import { useEffect, useId } from 'react'
 
-export function Modal({ open, title, onClose, children, footer }) {
+export function Modal({ open, title, onClose, children, footer, size = 'md' }) {
   const titleId = useId()
 
   useEffect(() => {
@@ -16,6 +16,8 @@ export function Modal({ open, title, onClose, children, footer }) {
 
   if (!open) return null
 
+  const modalClass = size === 'sm' ? 'modal modal-sm' : 'modal'
+
   return (
     <div
       className="modal-overlay open"
@@ -23,7 +25,7 @@ export function Modal({ open, title, onClose, children, footer }) {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div className={modalClass} role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <h3 id={titleId}>{title}</h3>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-actions">{footer}</div>}

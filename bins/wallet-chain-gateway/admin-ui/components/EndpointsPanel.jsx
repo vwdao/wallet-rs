@@ -5,6 +5,7 @@ import { chainName } from '../lib/chains.js'
 import { EndpointModal } from './EndpointModal.jsx'
 import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
+import { ConfirmDialog } from './ui/ConfirmDialog.jsx'
 import { Empty } from './ui/Empty.jsx'
 
 export function EndpointsPanel({ api }) {
@@ -13,7 +14,8 @@ export function EndpointsPanel({ api }) {
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingEndpoint, setEditingEndpoint] = useState(null)
-  const [disablingId, setDisablingId] = useState(null)
+  const [pendingDisable, setPendingDisable] = useState(null)
+  const [togglingId, setTogglingId] = useState(null)
 
   const loadEndpoints = useCallback(async () => {
     setError('')
@@ -52,18 +54,34 @@ export function EndpointsPanel({ api }) {
     await loadEndpoints()
   }
 
-  async function disableEndpoint(endpoint) {
-    if (!window.confirm(`确定要禁用 ${chainName(endpoint.chain_index)} 节点吗？`)) return
-
+  async function confirmDisable() {
+    if (!pendingDisable) return
     setError('')
-    setDisablingId(endpoint.id)
+    setTogglingId(pendingDisable.id)
     try {
-      await api(`/admin/endpoints/${endpoint.id}`, { method: 'DELETE' })
+      await api(`/admin/endpoints/${pendingDisable.id}`, { method: 'DELETE' })
+      setPendingDisable(null)
       await loadEndpoints()
     } catch (disableError) {
       setError(disableError.message || '禁用节点失败')
     } finally {
-      setDisablingId(null)
+      setTogglingId(null)
+    }
+  }
+
+  async function enableEndpoint(endpoint) {
+    setError('')
+    setTogglingId(endpoint.id)
+    try {
+      await api(`/admin/endpoints/${endpoint.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: true }),
+      })
+      await loadEndpoints()
+    } catch (enableError) {
+      setError(enableError.message || '启用节点失败')
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -126,14 +144,27 @@ export function EndpointsPanel({ api }) {
                       <Button variant="ghost" size="sm" onClick={() => openEdit(endpoint)}>
                         编辑
                       </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        disabled={disablingId === endpoint.id}
-                        onClick={() => disableEndpoint(endpoint)}
-                      >
-                        {disablingId === endpoint.id ? '禁用中…' : '禁用'}
-                      </Button>
+                      {endpoint.enabled ? (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={togglingId === endpoint.id}
+                          onClick={() => setPendingDisable(endpoint)}
+                        >
+                          禁用
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={togglingId === endpoint.id}
+                          loading={togglingId === endpoint.id}
+                          loadingText="启用中…"
+                          onClick={() => enableEndpoint(endpoint)}
+                        >
+                          启用
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -149,6 +180,19 @@ export function EndpointsPanel({ api }) {
         api={api}
         onClose={closeModal}
         onSaved={handleSaved}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDisable)}
+        title="禁用节点"
+        message={`确定要禁用 ${pendingDisable ? chainName(pendingDisable.chain_index) : ''} 节点吗？`}
+        detail={pendingDisable?.url}
+        confirmLabel="禁用"
+        loading={Boolean(pendingDisable && togglingId === pendingDisable.id)}
+        onCancel={() => {
+          if (!togglingId) setPendingDisable(null)
+        }}
+        onConfirm={confirmDisable}
       />
     </>
   )

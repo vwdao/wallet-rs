@@ -5,6 +5,7 @@ import { chainName } from '../lib/chains.js'
 import { KeyModal } from './KeyModal.jsx'
 import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
+import { ConfirmDialog } from './ui/ConfirmDialog.jsx'
 import { Empty } from './ui/Empty.jsx'
 
 const TIER_LABELS = {
@@ -19,7 +20,8 @@ export function KeysPanel({ api }) {
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKey, setEditingKey] = useState(null)
-  const [disablingId, setDisablingId] = useState(null)
+  const [pendingDisable, setPendingDisable] = useState(null)
+  const [togglingId, setTogglingId] = useState(null)
 
   const loadKeys = useCallback(async () => {
     setError('')
@@ -58,18 +60,34 @@ export function KeysPanel({ api }) {
     await loadKeys()
   }
 
-  async function disableKey(apiKey) {
-    if (!window.confirm(`确定要禁用 ${apiKey.name} 吗？`)) return
-
+  async function confirmDisable() {
+    if (!pendingDisable) return
     setError('')
-    setDisablingId(apiKey.id)
+    setTogglingId(pendingDisable.id)
     try {
-      await api(`/admin/keys/${apiKey.id}`, { method: 'DELETE' })
+      await api(`/admin/keys/${pendingDisable.id}`, { method: 'DELETE' })
+      setPendingDisable(null)
       await loadKeys()
     } catch (disableError) {
       setError(disableError.message || '禁用 API 密钥失败')
     } finally {
-      setDisablingId(null)
+      setTogglingId(null)
+    }
+  }
+
+  async function enableKey(apiKey) {
+    setError('')
+    setTogglingId(apiKey.id)
+    try {
+      await api(`/admin/keys/${apiKey.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: true }),
+      })
+      await loadKeys()
+    } catch (enableError) {
+      setError(enableError.message || '启用 API 密钥失败')
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -128,14 +146,27 @@ export function KeysPanel({ api }) {
                       <Button variant="ghost" size="sm" onClick={() => openEdit(apiKey)}>
                         编辑
                       </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        disabled={disablingId === apiKey.id}
-                        onClick={() => disableKey(apiKey)}
-                      >
-                        {disablingId === apiKey.id ? '禁用中…' : '禁用'}
-                      </Button>
+                      {apiKey.enabled ? (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={togglingId === apiKey.id}
+                          onClick={() => setPendingDisable(apiKey)}
+                        >
+                          禁用
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          disabled={togglingId === apiKey.id}
+                          loading={togglingId === apiKey.id}
+                          loadingText="启用中…"
+                          onClick={() => enableKey(apiKey)}
+                        >
+                          启用
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -151,6 +182,19 @@ export function KeysPanel({ api }) {
         api={api}
         onClose={closeModal}
         onSaved={handleSaved}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDisable)}
+        title="禁用 API 密钥"
+        message={`确定要禁用「${pendingDisable?.name || ''}」吗？`}
+        detail={pendingDisable?.api_key}
+        confirmLabel="禁用"
+        loading={Boolean(pendingDisable && togglingId === pendingDisable.id)}
+        onCancel={() => {
+          if (!togglingId) setPendingDisable(null)
+        }}
+        onConfirm={confirmDisable}
       />
     </>
   )

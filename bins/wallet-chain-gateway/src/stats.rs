@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 pub struct StatsEvent {
     pub api_key: String,
     pub chain_index: i64,
+    pub client_ip: Option<String>,
     pub method: Option<String>,
     pub status_code: i32,
     pub latency_ms: i32,
@@ -88,6 +89,7 @@ impl StatsWorker {
             let _ = toasty::create!(wallet_db::ChainGatewayStats {
                 api_key: &event.api_key,
                 chain_index: event.chain_index,
+                client_ip: event.client_ip.clone(),
                 method: event.method.clone(),
                 status_code: event.status_code,
                 latency_ms: event.latency_ms,

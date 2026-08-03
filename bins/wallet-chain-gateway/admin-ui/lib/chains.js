@@ -4,6 +4,10 @@ const CHAIN_NAMES = {
   10000900: 'AVAX', 10000999: 'HYPER', 10004663: 'ROBIN',
 }
 
+export const CHAIN_OPTIONS = Object.entries(CHAIN_NAMES)
+  .map(([id, name]) => ({ id: Number(id), name }))
+  .sort((a, b) => a.name.localeCompare(b.name))
+
 export function chainName(id) {
   return CHAIN_NAMES[id] ?? String(id)
 }

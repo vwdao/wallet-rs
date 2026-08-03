@@ -251,11 +251,14 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .and_then(|v| v.as_str())
             .map(String::from);
 
+        let client_ip = client_ip_of(req);
+
         match &rpc_result {
             Ok(_) => {
                 st.stats.record(stats::StatsEvent {
                     api_key: api_key.clone(),
                     chain_index,
+                    client_ip: client_ip.clone(),
                     method,
                     status_code: 200,
                     latency_ms: latency,
@@ -266,6 +269,7 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
                 st.stats.record(stats::StatsEvent {
                     api_key: api_key.clone(),
                     chain_index,
+                    client_ip: client_ip.clone(),
                     method,
                     status_code: 503,
                     latency_ms: latency,
@@ -292,3 +296,8 @@ fn build_http_client() -> reqwest::Client {
         .build()
         .expect("failed to build HTTP client")
 }
+
+fn client_ip_of(req: &Request) -> Option<String> {
+    req.remote_addr().ip().map(|ip| ip.to_string())
+}
+

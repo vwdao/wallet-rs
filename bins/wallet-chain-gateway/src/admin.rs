@@ -10,7 +10,6 @@ use wallet_error::AppError;
 use crate::free_rpc::{ChainSyncResult, FreeRpcSyncer};
 use crate::proxy;
 use crate::Gw;
-
 const TOKEN_TTL_SECS: i64 = 24 * 60 * 60;
 
 type HmacSha256 = hmac::Hmac<sha2::Sha256>;
@@ -662,7 +661,10 @@ async fn sync_free_endpoints(req: &mut Request, depot: &mut Depot, res: &mut Res
 struct StatsSummary {
     api_key: String,
     chain_index: i64,
+    client_ip: Option<String>,
+    method: Option<String>,
     total_requests: i64,
+    success_count: i64,
     error_count: i64,
     avg_latency_ms: f64,
 }
@@ -694,12 +696,17 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
 
-        let mut map: std::collections::HashMap<(String, i64), (i64, i64, i64)> =
+        let mut map: std::collections::HashMap<(String, i64, Option<String>, Option<String>), (i64, i64, i64)> =
             std::collections::HashMap::new();
 
         for row in &rows {
             let entry = map
-                .entry((row.api_key.clone(), row.chain_index))
+                .entry((
+                    row.api_key.clone(),
+                    row.chain_index,
+                    row.client_ip.clone(),
+                    row.method.clone(),
+                ))
                 .or_insert((0, 0, 0));
             entry.0 += 1;
             if row.status_code >= 400 {
@@ -711,21 +718,229 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let summaries: Vec<StatsSummary> = map
             .into_iter()
             .map(
-                |((api_key, chain_index), (total, errors, total_latency))| StatsSummary {
-                    api_key,
-                    chain_index,
-                    total_requests: total,
-                    error_count: errors,
-                    avg_latency_ms: if total > 0 {
-                        total_latency as f64 / total as f64
-                    } else {
-                        0.0
-                    },
+                |((api_key, chain_index, client_ip, method), (total, errors, total_latency))| {
+                    StatsSummary {
+                        api_key,
+                        chain_index,
+                        client_ip,
+                        method,
+                        total_requests: total,
+                        success_count: total - errors,
+                        error_count: errors,
+                        avg_latency_ms: if total > 0 {
+                            total_latency as f64 / total as f64
+                        } else {
+                            0.0
+                        },
+                    }
                 },
             )
             .collect();
 
         Ok(Json(summaries))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
+    }
+}
+
+#[derive(Serialize)]
+struct StatsSeriesPoint {
+    ts: i64,
+    success: i64,
+    error: i64,
+    avg_latency_ms: f64,
+}
+
+#[derive(Serialize)]
+struct StatsSeries {
+    range: String,
+    bucket_seconds: i64,
+    points: Vec<StatsSeriesPoint>,
+}
+
+#[handler]
+async fn get_stats_series(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<StatsSeries>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, st)?;
+
+        let range: String = req.query("range").unwrap_or_else(|| "1h".into());
+        let api_key: Option<String> = req.query("api_key");
+        let chain_index: Option<i64> = req.query("chain_index");
+
+        let (duration_secs, bucket_secs) = parse_stats_range(&range)?;
+
+        let now = jiff::Timestamp::now();
+        let cutoff = now
+            .checked_sub(jiff::Span::new().seconds(duration_secs))
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut q = ChainGatewayStats::all()
+            .filter(ChainGatewayStats::fields().created_at().ge(cutoff));
+        if let Some(key) = &api_key {
+            q = q.filter(ChainGatewayStats::fields().api_key().eq(key));
+        }
+        if let Some(ci) = chain_index {
+            q = q.filter(ChainGatewayStats::fields().chain_index().eq(ci));
+        }
+
+        let mut db = st.db.clone_inner();
+        let rows: Vec<ChainGatewayStats> = q
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut buckets: BTreeMap<i64, (i64, i64, i64)> = BTreeMap::new();
+        for row in &rows {
+            let bucket = (row.created_at.as_second() / bucket_secs) * bucket_secs;
+            let entry = buckets.entry(bucket).or_insert((0, 0, 0));
+            entry.0 += 1;
+            if row.status_code >= 400 {
+                entry.1 += 1;
+            }
+            entry.2 += row.latency_ms as i64;
+        }
+
+        let first_bucket = (cutoff.as_second() / bucket_secs) * bucket_secs;
+        let last_bucket = (now.as_second() / bucket_secs) * bucket_secs;
+        let mut points = Vec::new();
+        let mut bucket = first_bucket;
+        while bucket <= last_bucket {
+            let (total, errors, total_latency) = buckets.get(&bucket).copied().unwrap_or((0, 0, 0));
+            points.push(StatsSeriesPoint {
+                ts: bucket,
+                success: total - errors,
+                error: errors,
+                avg_latency_ms: if total > 0 {
+                    total_latency as f64 / total as f64
+                } else {
+                    0.0
+                },
+            });
+            bucket += bucket_secs;
+        }
+
+        Ok(Json(StatsSeries {
+            range,
+            bucket_seconds: bucket_secs,
+            points,
+        }))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
+    }
+}
+
+#[derive(Serialize)]
+struct StatsByIpItem {
+    client_ip: String,
+    total_requests: i64,
+    success_count: i64,
+    error_count: i64,
+    avg_latency_ms: f64,
+}
+
+#[derive(Serialize)]
+struct StatsByIp {
+    range: String,
+    items: Vec<StatsByIpItem>,
+}
+
+fn parse_stats_range(range: &str) -> Result<(i64, i64), AppError> {
+    match range {
+        "15m" => Ok((15 * 60, 60)),
+        "1h" => Ok((60 * 60, 5 * 60)),
+        "24h" => Ok((24 * 60 * 60, 60 * 60)),
+        "7d" => Ok((7 * 24 * 60 * 60, 6 * 60 * 60)),
+        "30d" => Ok((30 * 24 * 60 * 60, 24 * 60 * 60)),
+        other => Err(AppError::InvalidArgument(format!(
+            "unsupported range '{other}', expected one of 15m, 1h, 24h, 7d, 30d"
+        ))),
+    }
+}
+
+#[handler]
+async fn get_stats_by_ip(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<StatsByIp>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, st)?;
+
+        let range: String = req.query("range").unwrap_or_else(|| "1h".into());
+        let api_key: Option<String> = req.query("api_key");
+        let chain_index: Option<i64> = req.query("chain_index");
+        let limit_raw: i64 = req.query("limit").unwrap_or(12);
+        let limit = limit_raw.clamp(1, 50) as usize;
+
+        let (duration_secs, _) = parse_stats_range(&range)?;
+        let now = jiff::Timestamp::now();
+        let cutoff = now
+            .checked_sub(jiff::Span::new().seconds(duration_secs))
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut q = ChainGatewayStats::all()
+            .filter(ChainGatewayStats::fields().created_at().ge(cutoff));
+        if let Some(key) = &api_key {
+            q = q.filter(ChainGatewayStats::fields().api_key().eq(key));
+        }
+        if let Some(ci) = chain_index {
+            q = q.filter(ChainGatewayStats::fields().chain_index().eq(ci));
+        }
+
+        let mut db = st.db.clone_inner();
+        let rows: Vec<ChainGatewayStats> = q
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut map: std::collections::HashMap<String, (i64, i64, i64)> =
+            std::collections::HashMap::new();
+        for row in &rows {
+            let ip = row
+                .client_ip
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("未知")
+                .to_string();
+            let entry = map.entry(ip).or_insert((0, 0, 0));
+            entry.0 += 1;
+            if row.status_code >= 400 {
+                entry.1 += 1;
+            }
+            entry.2 += row.latency_ms as i64;
+        }
+
+        let mut items: Vec<StatsByIpItem> = map
+            .into_iter()
+            .map(|(client_ip, (total, errors, total_latency))| StatsByIpItem {
+                client_ip,
+                total_requests: total,
+                success_count: total - errors,
+                error_count: errors,
+                avg_latency_ms: if total > 0 {
+                    total_latency as f64 / total as f64
+                } else {
+                    0.0
+                },
+            })
+            .collect();
+        items.sort_by(|a, b| {
+            b.total_requests
+                .cmp(&a.total_requests)
+                .then_with(|| a.client_ip.cmp(&b.client_ip))
+        });
+        items.truncate(limit);
+
+        Ok(Json(StatsByIp { range, items }))
     }
     .await;
     match result {
@@ -883,6 +1098,8 @@ pub fn admin_router() -> Router {
                 .put(update_endpoint)
                 .delete(delete_endpoint),
         )
+        .push(Router::with_path("stats/series").get(get_stats_series))
+        .push(Router::with_path("stats/by-ip").get(get_stats_by_ip))
         .push(Router::with_path("stats").get(get_stats))
         .push(
             Router::with_path("settings")
