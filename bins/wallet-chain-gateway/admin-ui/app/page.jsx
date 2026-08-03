@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EndpointsPanel } from '../components/EndpointsPanel.jsx'
 import { KeysPanel } from '../components/KeysPanel.jsx'
 import { Login } from '../components/Login.jsx'
+import { SettingsPanel } from '../components/SettingsPanel.jsx'
 import { Shell } from '../components/Shell.jsx'
 import { StatsPanel } from '../components/StatsPanel.jsx'
-import { Empty } from '../components/ui/Empty.jsx'
 import { createApi } from '../lib/api.js'
 import { clearToken, getToken } from '../lib/auth.js'
 
@@ -37,9 +37,9 @@ export default function Page() {
         <KeysPanel api={api} />
       ) : tab === 'stats' ? (
         <StatsPanel api={api} />
-      ) : (
-        <Empty>面板将在后续任务接入</Empty>
-      )}
+      ) : tab === 'settings' ? (
+        <SettingsPanel api={api} />
+      ) : null}
     </Shell>
   )
 }
