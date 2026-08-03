@@ -52,6 +52,7 @@ RUN rm -rf crates/*/src bins/*/src
 COPY proto proto
 COPY crates crates
 COPY bins bins
+COPY migrations migrations
 
 # The gateway embeds the generated Vue entrypoint at compile time.
 RUN rm -rf bins/wallet-chain-gateway/static && mkdir -p bins/wallet-chain-gateway/static
@@ -84,6 +85,9 @@ COPY --from=builder /app/target/release/wallet-jobs /app/wallet-jobs
 COPY --from=builder /app/target/release/wallet-ws /app/wallet-ws
 
 RUN chown -R wallet:wallet /app
+
+# SQL migrations are read at runtime from <crate>/../../migrations (i.e. /app/migrations)
+COPY --from=builder /app/migrations /app/migrations
 
 # Default: show available binaries
 CMD ["ls", "-la", "/app/"]
