@@ -11,7 +11,8 @@ path = "src/main.rs"
 wallet-config = { workspace = true }
 wallet-error = { workspace = true }
 wallet-db = { workspace = true }
-salvo = { workspace = true }
+salvo = { workspace = true, features = ["serve-static"] }
+rust-embed = "8"
 tokio = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

@@ -1,6 +1,8 @@
 use clap::Parser;
 use dashmap::DashMap;
+use rust_embed::RustEmbed;
 use salvo::prelude::*;
+use salvo::serve_static::static_embed;
 use serde_json::Value;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -22,7 +24,9 @@ mod state_injector;
 mod stats;
 mod transports;
 
-const ADMIN_HTML: &str = include_str!("../static/admin.html");
+#[derive(RustEmbed)]
+#[folder = "static/admin"]
+struct AdminAssets;
 
 use settings::SettingsHandle;
 use state_injector::StateInjector;
@@ -145,8 +149,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .post(proxy_rpc)
                         .get(proxy_ws::proxy_rpc_ws),
                 )
-                .push(Router::with_path("admin").get(admin_ui))
                 .push(admin::admin_router())
+                .push(
+                    Router::with_path("admin/{*path}")
+                        .get(static_embed::<AdminAssets>().fallback("index.html")),
+                )
+                .push(
+                    Router::with_path("admin")
+                        .get(static_embed::<AdminAssets>().fallback("index.html")),
+                )
                 .hoop(StateInjector(state)),
         );
 
@@ -181,12 +192,6 @@ async fn readyz(_req: &mut Request, depot: &mut Depot, res: &mut Response) {
             res.render(Text::Plain("not ready"));
         }
     }
-}
-
-#[handler]
-async fn admin_ui(_req: &mut Request, _depot: &mut Depot, res: &mut Response) {
-    let _ = res.add_header("content-type", "text/html; charset=utf-8", true);
-    res.render(ADMIN_HTML);
 }
 
 #[handler]
