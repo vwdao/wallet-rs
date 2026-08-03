@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { EndpointsPanel } from '../components/EndpointsPanel.jsx'
 import { Login } from '../components/Login.jsx'
 import { Shell } from '../components/Shell.jsx'
 import { Empty } from '../components/ui/Empty.jsx'
+import { createApi } from '../lib/api.js'
 import { clearToken, getToken } from '../lib/auth.js'
 
 export default function Page() {
@@ -14,10 +16,12 @@ export default function Page() {
     setAuthenticated(Boolean(getToken()))
   }, [])
 
-  function logout() {
+  const logout = useCallback(() => {
     clearToken()
     setAuthenticated(false)
-  }
+  }, [])
+
+  const { api } = useMemo(() => createApi({ onUnauthorized: logout }), [logout])
 
   if (!authenticated) {
     return <Login onSuccess={() => setAuthenticated(true)} />
@@ -25,7 +29,11 @@ export default function Page() {
 
   return (
     <Shell tab={tab} onTab={setTab} onLogout={logout}>
-      <Empty>面板将在后续任务接入</Empty>
+      {tab === 'endpoints' ? (
+        <EndpointsPanel api={api} />
+      ) : (
+        <Empty>面板将在后续任务接入</Empty>
+      )}
     </Shell>
   )
 }
