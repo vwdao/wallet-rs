@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EndpointsPanel } from '../components/EndpointsPanel.jsx'
+import { KeysPanel } from '../components/KeysPanel.jsx'
 import { Login } from '../components/Login.jsx'
 import { Shell } from '../components/Shell.jsx'
 import { Empty } from '../components/ui/Empty.jsx'
@@ -31,6 +32,8 @@ export default function Page() {
     <Shell tab={tab} onTab={setTab} onLogout={logout}>
       {tab === 'endpoints' ? (
         <EndpointsPanel api={api} />
+      ) : tab === 'keys' ? (
+        <KeysPanel api={api} />
       ) : (
         <Empty>面板将在后续任务接入</Empty>
       )}
