@@ -36,9 +36,13 @@ export function StatsChart({ data, loading = false }) {
       <canvas
         ref={canvasRef}
         aria-label="请求成功、错误和平均延迟趋势图"
-        style={{ display: empty ? 'none' : 'block', width: '100%', height: 260 }}
+        style={{ display: empty || loading ? 'none' : 'block', width: '100%', height: 260 }}
       />
-      {empty ? <div className="chart-empty">所选时间范围内暂无请求数据</div> : null}
+      {loading ? (
+        <div className="chart-empty">正在加载趋势图…</div>
+      ) : empty ? (
+        <div className="chart-empty">所选时间范围内暂无请求数据</div>
+      ) : null}
       <div style={{ display: 'flex', gap: 18, marginTop: 10, color: 'var(--muted)', fontSize: 12 }}>
         <span><i style={dotStyle('var(--green)')} />成功</span>
         <span><i style={dotStyle('var(--red)')} />错误</span>
