@@ -3,7 +3,7 @@ use salvo::websocket::WebSocketUpgrade;
 use std::time::Instant;
 
 use crate::proxy;
-use crate::protocol::parse_endpoint_url;
+use crate::protocol::parse_endpoint_url_with;
 use crate::stats;
 use crate::Gw;
 
@@ -36,7 +36,7 @@ pub async fn proxy_rpc_ws(
     let user_tier = auth.key_row.allowed_tier.clone();
     let api_key = auth.api_key.clone();
 
-    let url = match st
+    let selection = match st
         .router
         .select_endpoint(
             chain_index,
@@ -46,14 +46,17 @@ pub async fn proxy_rpc_ws(
         )
         .await
     {
-        Ok(u) => u,
+        Ok(s) => s,
         Err(e) => {
             res.render(e);
             return Ok(());
         }
     };
+    let url = selection.url;
+    let protocol = selection.protocol;
+    let headers = selection.headers;
 
-    let (protocol, _) = match parse_endpoint_url(&url) {
+    let (protocol, _) = match parse_endpoint_url_with(&url, protocol) {
         Ok(v) => v,
         Err(e) => {
             res.render(e);
@@ -86,7 +89,8 @@ pub async fn proxy_rpc_ws(
 
     WebSocketUpgrade::new()
         .upgrade(req, res, move |ws| async move {
-            let result = crate::transports::tunnel(ws, &endpoint_url).await;
+            let result = crate::transports::tunnel(ws, &endpoint_url, Some(protocol), &headers)
+                .await;
             let latency = start.elapsed().as_millis() as i32;
             match &result {
                 Ok(()) => {

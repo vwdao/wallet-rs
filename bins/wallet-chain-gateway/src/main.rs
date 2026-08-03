@@ -35,6 +35,8 @@ pub struct Gw {
     pub stats: stats::StatsCollector,
     pub rate: Arc<DashMap<String, Vec<Instant>>>,
     pub admin_key: Option<String>,
+    pub admin_username: Option<String>,
+    pub admin_password: Option<String>,
     pub settings: SettingsHandle,
 }
 
@@ -46,6 +48,7 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let _ = rustls::crypto::ring::default_provider().install_default();
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env().add_directive("info".parse()?))
         .init();
@@ -74,6 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         stats: stats_collector,
         rate: Arc::new(DashMap::new()),
         admin_key: cfg.admin_key.clone(),
+        admin_username: cfg.admin_username.clone(),
+        admin_password: cfg.admin_password.clone(),
         settings: settings_handle.clone(),
     };
 

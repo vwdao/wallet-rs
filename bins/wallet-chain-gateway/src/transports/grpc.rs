@@ -9,7 +9,7 @@ use tonic::transport::Channel;
 use tonic::{Request, Status};
 use wallet_error::{AppError, AppResult};
 
-use super::ws_bridge;
+use super::{ws_bridge, EndpointHeaders};
 
 #[derive(Clone, Default)]
 struct BytesCodec;
@@ -95,6 +95,7 @@ pub async fn execute(
     http: &reqwest::Client,
     url: &str,
     body: &Value,
+    headers: &EndpointHeaders,
     request_timeout: Duration,
 ) -> AppResult<Value> {
     let http_url = grpc_to_http_url(url)?;
@@ -108,12 +109,18 @@ pub async fn execute(
     frame.extend_from_slice(&payload);
 
     let target = format!("{http_url}{method_path}");
-    let resp = http
+    let mut req = http
         .post(&target)
         .header("content-type", "application/grpc")
         .header("te", "trailers")
         .body(frame)
-        .timeout(request_timeout)
+        .timeout(request_timeout);
+    for (name, value) in headers {
+        if !name.eq_ignore_ascii_case("content-type") && !name.eq_ignore_ascii_case("te") {
+            req = req.header(name, value);
+        }
+    }
+    let resp = req
         .send()
         .await
         .map_err(|e| AppError::Unavailable(e.to_string()))?;
@@ -149,7 +156,11 @@ fn decode_grpc_json_response(bytes: &[u8]) -> AppResult<Value> {
     Ok(v)
 }
 
-pub async fn tunnel(client_ws: WebSocket, url: &str) -> AppResult<()> {
+pub async fn tunnel(
+    client_ws: WebSocket,
+    url: &str,
+    headers: &EndpointHeaders,
+) -> AppResult<()> {
     let http_url = grpc_to_http_url(url)?;
     let method_path = grpc_method_path(url)?;
     let channel = Channel::from_shared(http_url)
@@ -162,7 +173,18 @@ pub async fn tunnel(client_ws: WebSocket, url: &str) -> AppResult<()> {
         .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
     let mut grpc = tonic::client::Grpc::new(channel);
     let (tx, rx) = tokio::sync::mpsc::channel::<Bytes>(32);
-    let request = Request::new(tokio_stream::wrappers::ReceiverStream::new(rx));
+    let mut request = Request::new(tokio_stream::wrappers::ReceiverStream::new(rx));
+    for (name, value) in headers {
+        if name.starts_with(':') {
+            continue;
+        }
+        if let Ok(metadata_value) =
+            value.parse::<tonic::metadata::MetadataValue<tonic::metadata::Ascii>>()
+        {
+            let key: &'static str = Box::leak(name.to_ascii_lowercase().into_boxed_str());
+            request.metadata_mut().insert(key, metadata_value);
+        }
+    }
 
     let mut response = grpc
         .streaming(request, path, BytesCodec)

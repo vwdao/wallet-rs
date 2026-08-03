@@ -4,25 +4,30 @@ mod tcp;
 mod ws;
 mod ws_bridge;
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use salvo::websocket::WebSocket;
 use serde_json::Value;
 use wallet_error::AppResult;
 
-use crate::protocol::{parse_endpoint_url, EndpointProtocol};
+use crate::protocol::{parse_endpoint_url_with, EndpointProtocol};
+
+pub type EndpointHeaders = BTreeMap<String, String>;
 
 pub async fn execute_unary(
     http: &reqwest::Client,
     url: &str,
     body: &Value,
+    protocol: Option<EndpointProtocol>,
+    headers: &EndpointHeaders,
     timeout: Duration,
 ) -> AppResult<Value> {
-    let (protocol, parsed) = parse_endpoint_url(url)?;
+    let (protocol, parsed) = parse_endpoint_url_with(url, protocol)?;
     match protocol {
-        EndpointProtocol::Http => http::execute(http, url, body, timeout).await,
-        EndpointProtocol::WebSocket => ws::execute(url, body, timeout).await,
-        EndpointProtocol::Grpc => grpc::execute(http, url, body, timeout).await,
+        EndpointProtocol::Http => http::execute(http, url, body, headers, timeout).await,
+        EndpointProtocol::WebSocket => ws::execute(url, body, headers, timeout).await,
+        EndpointProtocol::Grpc => grpc::execute(http, url, body, headers, timeout).await,
         EndpointProtocol::Tcp => tcp::execute(&parsed, body, timeout).await,
     }
 }
@@ -30,16 +35,18 @@ pub async fn execute_unary(
 pub async fn tunnel(
     client_ws: WebSocket,
     url: &str,
+    protocol: Option<EndpointProtocol>,
+    headers: &EndpointHeaders,
 ) -> AppResult<()> {
-    let (protocol, parsed) = parse_endpoint_url(url)?;
+    let (protocol, parsed) = parse_endpoint_url_with(url, protocol)?;
     if !protocol.supports_ws_tunnel() {
         return Err(wallet_error::AppError::InvalidArgument(format!(
             "endpoint protocol does not support websocket tunnel: {url}"
         )));
     }
     match protocol {
-        EndpointProtocol::WebSocket => ws::tunnel(client_ws, url).await,
-        EndpointProtocol::Grpc => grpc::tunnel(client_ws, url).await,
+        EndpointProtocol::WebSocket => ws::tunnel(client_ws, url, headers).await,
+        EndpointProtocol::Grpc => grpc::tunnel(client_ws, url, headers).await,
         EndpointProtocol::Tcp => tcp::tunnel(client_ws, &parsed).await,
         EndpointProtocol::Http => unreachable!(),
     }
@@ -48,10 +55,12 @@ pub async fn tunnel(
 pub async fn probe(
     http: &reqwest::Client,
     url: &str,
+    protocol: Option<EndpointProtocol>,
+    headers: &EndpointHeaders,
     method: &str,
     family: &str,
 ) -> AppResult<(i32, Option<i64>)> {
-    let (protocol, parsed) = parse_endpoint_url(url)?;
+    let (protocol, parsed) = parse_endpoint_url_with(url, protocol)?;
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -61,11 +70,11 @@ pub async fn probe(
     let start = std::time::Instant::now();
     let result = match protocol {
         EndpointProtocol::Http => {
-            let v = http::execute(http, url, &body, Duration::from_secs(5)).await?;
+            let v = http::execute(http, url, &body, headers, Duration::from_secs(5)).await?;
             parse_probe_result(&v, family)
         }
         EndpointProtocol::WebSocket => {
-            let v = ws::execute(url, &body, Duration::from_secs(5)).await?;
+            let v = ws::execute(url, &body, headers, Duration::from_secs(5)).await?;
             parse_probe_result(&v, family)
         }
         EndpointProtocol::Grpc => {

@@ -61,6 +61,12 @@ pub struct RpcEndpointBody {
     pub weight: u32,
     /// Whether the endpoint is enabled
     pub enabled: bool,
+    /// Custom request headers sent to the RPC endpoint
+    #[serde(default)]
+    pub headers: std::collections::HashMap<String, String>,
+    /// Explicit transport protocol override: http/ws/grpc/tcp (empty = auto from url scheme)
+    #[serde(default)]
+    pub protocol: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -225,6 +231,10 @@ pub struct RpcEndpointInfo {
     pub weight: u32,
     /// Whether enabled
     pub enabled: bool,
+    /// Custom request headers sent to the RPC endpoint
+    pub headers: std::collections::HashMap<String, String>,
+    /// Explicit transport protocol override: http/ws/grpc/tcp (empty = auto from url scheme)
+    pub protocol: String,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -337,6 +347,8 @@ impl From<wallet_proto::wallet::v1::admin::RpcEndpoint> for RpcEndpointInfo {
             url: r.url,
             weight: r.weight,
             enabled: r.enabled,
+            headers: r.headers,
+            protocol: r.protocol,
         }
     }
 }

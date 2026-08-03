@@ -223,6 +223,8 @@ pub async fn upsert_rpc_endpoint(
         url: body.url,
         weight: body.weight,
         enabled: body.enabled,
+        headers: body.headers,
+        protocol: body.protocol,
     };
     let mut c = st.rpc_endpoints.clone();
     let resp = c.upsert_endpoint(proto).await?;
@@ -233,6 +235,8 @@ pub async fn upsert_rpc_endpoint(
         url: inner.url,
         weight: inner.weight,
         enabled: inner.enabled,
+        headers: inner.headers,
+        protocol: inner.protocol,
     }))
 }
 

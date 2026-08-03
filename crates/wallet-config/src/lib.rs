@@ -148,6 +148,10 @@ pub struct ChainGatewayConfig {
     pub failure_threshold: u32,
     #[serde(default)]
     pub admin_key: Option<String>,
+    #[serde(default)]
+    pub admin_username: Option<String>,
+    #[serde(default)]
+    pub admin_password: Option<String>,
     #[serde(default = "default_stats_batch_interval_ms")]
     pub stats_batch_interval_ms: u64,
 }

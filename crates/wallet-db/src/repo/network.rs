@@ -92,8 +92,10 @@ impl<'a> NetworkRepo<'a> {
                 existing
                     .update()
                     .url(&row.url)
+                    .protocol(&row.protocol)
                     .weight(row.weight)
                     .enabled(row.enabled)
+                    .headers(&row.headers)
                     .exec(&mut db)
                     .await
                     .map_err(|e| AppError::internal(e.to_string()))?;
@@ -105,8 +107,10 @@ impl<'a> NetworkRepo<'a> {
                 id: row.id,
                 chain_index: row.chain_index,
                 url: &row.url,
+                protocol: &row.protocol,
                 weight: row.weight,
                 enabled: row.enabled,
+                headers: &row.headers,
             })
             .exec(&mut db)
             .await

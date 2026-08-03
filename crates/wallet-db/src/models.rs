@@ -61,6 +61,9 @@ pub struct RpcEndpoint {
 
     pub url: String,
 
+    #[default(String::from(""))]
+    pub protocol: String,
+
     pub weight: i32,
 
     pub enabled: bool,
@@ -73,6 +76,10 @@ pub struct RpcEndpoint {
 
     #[default(0)]
     pub priority: i32,
+
+    #[column(type = jsonb)]
+    #[default(serde_json::json!({}))]
+    pub headers: serde_json::Value,
 
     pub last_health_check: Option<jiff::Timestamp>,
 

@@ -94,7 +94,11 @@ impl HealthChecker {
                 .map(|s| s.as_str())
                 .unwrap_or("evm");
             let probe_method = probe_method_for_chain(family);
-            let result = transports::probe(&self.http, &ep.url, probe_method, family).await;
+            let protocol = crate::protocol::EndpointProtocol::from_config_opt(&ep.protocol);
+            let headers = serde_json::from_value(ep.headers.clone()).unwrap_or_default();
+            let result =
+                transports::probe(&self.http, &ep.url, protocol, &headers, probe_method, family)
+                    .await;
 
             let mut db = self.db.clone_inner();
             match result {

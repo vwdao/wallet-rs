@@ -4,16 +4,42 @@ use futures::{SinkExt, StreamExt};
 use salvo::websocket::{Message, WebSocket};
 use serde_json::Value;
 use tokio::time::timeout;
-use tokio_tungstenite::{connect_async, tungstenite::Message as UpstreamMessage};
+use tokio_tungstenite::tungstenite::client::{ClientRequestBuilder, IntoClientRequest};
+use tokio_tungstenite::tungstenite::Message as UpstreamMessage;
+use tokio_tungstenite::connect_async;
 use wallet_error::{AppError, AppResult};
 
 use super::ws_bridge;
+use super::EndpointHeaders;
 
-pub async fn execute(url: &str, body: &Value, request_timeout: Duration) -> AppResult<Value> {
+fn ws_request(
+    url: &str,
+    headers: &EndpointHeaders,
+) -> Result<http::Request<()>, AppError> {
+    let uri: http::Uri = url
+        .parse()
+        .map_err(|e| AppError::InvalidArgument(format!("invalid ws url '{url}': {e}")))?;
+    let mut builder = ClientRequestBuilder::new(uri);
+    for (name, value) in headers {
+        builder = builder.with_header(name.clone(), value.clone());
+    }
+    let request = builder
+        .into_client_request()
+        .map_err(|e| AppError::InvalidArgument(format!("build ws request: {e}")))?;
+    Ok(request)
+}
+
+pub async fn execute(
+    url: &str,
+    body: &Value,
+    headers: &EndpointHeaders,
+    request_timeout: Duration,
+) -> AppResult<Value> {
     let payload = serde_json::to_string(body)
         .map_err(|e| AppError::internal(format!("encode json: {e}")))?;
 
-    let connect = connect_async(url);
+    let request = ws_request(url, headers)?;
+    let connect = connect_async(request);
     let (ws, _) = timeout(request_timeout, connect)
         .await
         .map_err(|_| AppError::Unavailable("ws connect timeout".into()))?
@@ -46,8 +72,9 @@ pub async fn execute(url: &str, body: &Value, request_timeout: Duration) -> AppR
     Ok(v)
 }
 
-pub async fn tunnel(client_ws: WebSocket, url: &str) -> AppResult<()> {
-    let (upstream, _) = connect_async(url)
+pub async fn tunnel(client_ws: WebSocket, url: &str, headers: &EndpointHeaders) -> AppResult<()> {
+    let request = ws_request(url, headers)?;
+    let (upstream, _) = connect_async(request)
         .await
         .map_err(|e| AppError::Unavailable(e.to_string()))?;
 

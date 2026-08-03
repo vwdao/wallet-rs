@@ -7,18 +7,27 @@ use wallet_db::RpcEndpoint;
 use wallet_error::{AppError, AppResult};
 
 use crate::health::is_archive_method;
-use crate::protocol::parse_endpoint_url;
-use crate::transports;
+use crate::protocol::{parse_endpoint_url_with, EndpointProtocol};
+use crate::transports::{self, EndpointHeaders};
 
 #[derive(Debug, Clone)]
 struct CachedEndpoint {
     url: String,
+    protocol: Option<EndpointProtocol>,
     tier: String,
     is_archive: bool,
     priority: i32,
     weight: i32,
     avg_latency_ms: i32,
     block_height: Option<i64>,
+    headers: EndpointHeaders,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectedEndpoint {
+    pub url: String,
+    pub protocol: Option<EndpointProtocol>,
+    pub headers: EndpointHeaders,
 }
 
 #[derive(Debug)]
@@ -116,12 +125,14 @@ impl RpcRouter {
             .into_iter()
             .map(|r| CachedEndpoint {
                 url: r.url,
+                protocol: EndpointProtocol::from_config_opt(&r.protocol),
                 tier: r.tier,
                 is_archive: r.is_archive,
                 priority: r.priority,
                 weight: r.weight.max(1),
                 avg_latency_ms: r.avg_latency_ms.unwrap_or(5000),
                 block_height: r.block_height,
+                headers: serde_json::from_value(r.headers).unwrap_or_default(),
             })
             .collect();
 
@@ -144,7 +155,7 @@ impl RpcRouter {
         method: Option<&str>,
         user_tier: &str,
         max_block_lag: i64,
-    ) -> AppResult<String> {
+    ) -> AppResult<SelectedEndpoint> {
         let all_eps = self.get_endpoints(chain_index).await?;
         if all_eps.is_empty() {
             return Err(AppError::Unavailable(format!(
@@ -212,10 +223,18 @@ impl RpcRouter {
         for ep in candidates {
             pick -= self.effective_weight(ep);
             if pick < 0 {
-                return Ok(ep.url.clone());
+                return Ok(SelectedEndpoint {
+                    url: ep.url.clone(),
+                    protocol: ep.protocol,
+                    headers: ep.headers.clone(),
+                });
             }
         }
-        Ok(candidates.last().unwrap().url.clone())
+        Ok(SelectedEndpoint {
+            url: candidates.last().unwrap().url.clone(),
+            protocol: candidates.last().unwrap().protocol,
+            headers: candidates.last().unwrap().headers.clone(),
+        })
     }
 
     fn effective_weight(&self, endpoint: &CachedEndpoint) -> i32 {
@@ -267,29 +286,39 @@ impl RpcRouter {
 
         let mut last_err = None;
         for _ in 0..max_retries.max(1) {
-            let url = match self
+            let selection = match self
                 .select_endpoint(chain_index, method, user_tier, max_block_lag.max(0))
                 .await
             {
-                Ok(u) => u,
+                Ok(s) => s,
                 Err(e) => return Err(e),
             };
+            let url = &selection.url;
 
-            if parse_endpoint_url(&url).is_err() {
-                self.mark_failure(&url);
+            if parse_endpoint_url_with(url, selection.protocol).is_err() {
+                self.mark_failure(url);
                 last_err = Some(AppError::InvalidArgument(format!(
                     "invalid endpoint url: {url}"
                 )));
                 continue;
             }
 
-            match transports::execute_unary(&self.http, &url, body, timeout).await {
+            match transports::execute_unary(
+                &self.http,
+                url,
+                body,
+                selection.protocol,
+                &selection.headers,
+                timeout,
+            )
+            .await
+            {
                 Ok(v) => {
-                    self.mark_success(&url);
+                    self.mark_success(url);
                     return Ok(v);
                 }
                 Err(e) => {
-                    self.mark_failure(&url);
+                    self.mark_failure(url);
                     last_err = Some(e);
                 }
             }

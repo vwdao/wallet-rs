@@ -215,6 +215,8 @@ impl AdminRpcEndpointService for AdminRpcSvc {
                 url: e.url,
                 weight: e.weight as u32,
                 enabled: e.enabled,
+                headers: serde_json::from_value(e.headers).unwrap_or_default(),
+                protocol: e.protocol,
             })
             .collect();
         Ok(Response::new(ListEndpointsResponse { items }))
@@ -225,18 +227,23 @@ impl AdminRpcEndpointService for AdminRpcSvc {
         req: Request<RpcEndpoint>,
     ) -> Result<Response<RpcEndpoint>, Status> {
         let e = req.into_inner();
+        let headers = serde_json::to_value(&e.headers)
+            .map_err(|err| Status::invalid_argument(format!("invalid headers: {err}")))?;
         let row = wallet_db::RpcEndpointRow {
             id: Uuid::parse_str(&e.id).unwrap_or_else(|_| Uuid::new_v4()),
             chain_index: e.chain_index,
             url: e.url.clone(),
+            protocol: e.protocol.clone(),
             weight: e.weight as i32,
             enabled: e.enabled,
             tier: String::from("free"),
             is_archive: false,
             priority: 0,
+            headers,
             last_health_check: None,
             healthy: true,
             avg_latency_ms: None,
+            block_height: None,
             error_count: 0,
             created_at: jiff::Timestamp::now(),
         };
@@ -247,6 +254,8 @@ impl AdminRpcEndpointService for AdminRpcSvc {
             url: saved.url,
             weight: saved.weight as u32,
             enabled: saved.enabled,
+            headers: serde_json::from_value(saved.headers).unwrap_or_default(),
+            protocol: saved.protocol,
         }))
     }
 

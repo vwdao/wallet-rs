@@ -5,5 +5,7 @@ redis:
   url: "redis://127.0.0.1:6379"
 health_check_interval_ms: 30000
 failure_threshold: 3
+admin_username: "admin"
+admin_password: "changeme-admin-password"
 admin_key: "changeme-admin-key"
 stats_batch_interval_ms: 1000

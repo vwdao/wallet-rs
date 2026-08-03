@@ -1,5 +1,8 @@
+use base64::Engine;
+use hmac::Mac;
 use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use uuid::Uuid;
 use wallet_db::{ChainGatewayKey, ChainGatewayStats, GatewaySettings, RpcEndpoint};
 use wallet_error::AppError;
@@ -8,12 +11,62 @@ use crate::free_rpc::{ChainSyncResult, FreeRpcSyncer};
 use crate::proxy;
 use crate::Gw;
 
-fn require_admin(
-    req: &Request,
-    _depot: &Depot,
-    admin_key: &Option<String>,
-) -> Result<(), AppError> {
-    if let Some(expected) = admin_key {
+const TOKEN_TTL_SECS: i64 = 24 * 60 * 60;
+
+type HmacSha256 = hmac::Hmac<sha2::Sha256>;
+
+fn sign_token(secret: &str, username: &str) -> String {
+    let exp = jiff::Timestamp::now().as_second() + TOKEN_TTL_SECS;
+    let payload = format!("{username}:{exp}");
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac accepts any key");
+    mac.update(payload.as_bytes());
+    let sig = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
+    let body = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(payload.as_bytes());
+    format!("{body}.{sig}")
+}
+
+fn verify_token(secret: &str, token: &str) -> Option<String> {
+    let (body, sig) = token.split_once('.')?;
+    let payload = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(body)
+        .ok()?;
+    let expected = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(sig)
+        .ok()?;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).ok()?;
+    mac.update(&payload);
+    if mac.verify_slice(&expected).is_err() {
+        return None;
+    }
+    let payload = std::str::from_utf8(&payload).ok()?;
+    let (username, exp) = payload.rsplit_once(':')?;
+    let exp: i64 = exp.parse().ok()?;
+    if jiff::Timestamp::now().as_second() > exp {
+        return None;
+    }
+    Some(username.to_string())
+}
+
+fn bearer_token(req: &Request) -> Option<String> {
+    let auth = req.headers().get("authorization")?.to_str().ok()?;
+    auth.strip_prefix("Bearer ")
+        .or_else(|| auth.strip_prefix("bearer "))
+        .map(|s| s.trim().to_string())
+}
+
+fn require_admin(req: &Request, _depot: &Depot, st: &Gw) -> Result<(), AppError> {
+    if let Some(token) = bearer_token(req) {
+        let secret = st
+            .admin_password
+            .as_deref()
+            .or(st.admin_key.as_deref());
+        if let Some(secret) = secret {
+            if verify_token(secret, &token).is_some() {
+                return Ok(());
+            }
+        }
+    }
+    if let Some(expected) = &st.admin_key {
         let provided = req
             .headers()
             .get("x-admin-key")
@@ -24,6 +77,66 @@ fn require_admin(
         }
     } else {
         Err(AppError::Forbidden)
+    }
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    username: String,
+    password: String,
+}
+
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+    expires_in: i64,
+}
+
+fn validate_headers(headers: &BTreeMap<String, String>) -> Result<(), AppError> {
+    for (name, value) in headers {
+        name.parse::<http::header::HeaderName>()
+            .map_err(|e| AppError::InvalidArgument(format!("invalid header name '{name}': {e}")))?;
+        http::header::HeaderValue::from_str(value).map_err(|e| {
+            AppError::InvalidArgument(format!("invalid value for header '{name}': {e}"))
+        })?;
+    }
+    Ok(())
+}
+
+#[handler]
+async fn login(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<LoginResponse>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+
+        let body: LoginRequest = req
+            .parse_json()
+            .await
+            .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
+
+        let (username, password, secret) = match (&st.admin_username, &st.admin_password) {
+            (Some(u), Some(p)) => (u.as_str(), p.as_str(), p.as_str()),
+            (None, None) => match &st.admin_key {
+                Some(k) => ("admin", k.as_str(), k.as_str()),
+                None => return Err(AppError::Forbidden),
+            },
+            _ => return Err(AppError::Forbidden),
+        };
+
+        if body.username != username || body.password != password {
+            return Err(AppError::Unauthorized);
+        }
+
+        Ok(Json(LoginResponse {
+            token: sign_token(secret, username),
+            expires_in: TOKEN_TTL_SECS,
+        }))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
     }
 }
 
@@ -94,7 +207,7 @@ async fn list_keys(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let mut db = st.db.clone_inner();
         let rows: Vec<ChainGatewayKey> = ChainGatewayKey::all()
@@ -117,7 +230,7 @@ async fn create_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let body: CreateKeyRequest = req
             .parse_json()
@@ -153,7 +266,7 @@ async fn update_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let id_str: String = req
             .param("id")
@@ -210,7 +323,7 @@ async fn delete_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let id_str: String = req
             .param("id")
@@ -246,6 +359,7 @@ struct EndpointResponse {
     id: Uuid,
     chain_index: i64,
     url: String,
+    protocol: String,
     weight: i32,
     enabled: bool,
     tier: String,
@@ -254,6 +368,7 @@ struct EndpointResponse {
     healthy: bool,
     avg_latency_ms: Option<i32>,
     error_count: i32,
+    headers: BTreeMap<String, String>,
 }
 
 impl EndpointResponse {
@@ -262,6 +377,7 @@ impl EndpointResponse {
             id: r.id,
             chain_index: r.chain_index,
             url: r.url.clone(),
+            protocol: r.protocol.clone(),
             weight: r.weight,
             enabled: r.enabled,
             tier: r.tier.clone(),
@@ -270,6 +386,7 @@ impl EndpointResponse {
             healthy: r.healthy,
             avg_latency_ms: r.avg_latency_ms,
             error_count: r.error_count,
+            headers: serde_json::from_value(r.headers.clone()).unwrap_or_default(),
         }
     }
 }
@@ -278,6 +395,8 @@ impl EndpointResponse {
 struct CreateEndpointRequest {
     chain_index: i64,
     url: String,
+    #[serde(default)]
+    protocol: String,
     #[serde(default = "default_weight")]
     weight: i32,
     #[serde(default = "default_true")]
@@ -288,6 +407,8 @@ struct CreateEndpointRequest {
     is_archive: bool,
     #[serde(default)]
     priority: i32,
+    #[serde(default)]
+    headers: BTreeMap<String, String>,
 }
 
 fn default_weight() -> i32 {
@@ -300,11 +421,20 @@ fn default_tier_free() -> String {
 #[derive(Deserialize)]
 struct UpdateEndpointRequest {
     url: Option<String>,
+    protocol: Option<String>,
     weight: Option<i32>,
     enabled: Option<bool>,
     tier: Option<String>,
     is_archive: Option<bool>,
     priority: Option<i32>,
+    headers: Option<BTreeMap<String, String>>,
+}
+
+fn validate_protocol(protocol: &str) -> Result<(), AppError> {
+    if !protocol.is_empty() {
+        crate::protocol::EndpointProtocol::from_config(protocol)?;
+    }
+    Ok(())
 }
 
 #[handler]
@@ -313,7 +443,7 @@ async fn list_endpoints(req: &mut Request, depot: &mut Depot, res: &mut Response
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let mut db = st.db.clone_inner();
         let rows: Vec<RpcEndpoint> = RpcEndpoint::all()
@@ -336,7 +466,7 @@ async fn create_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let body: CreateEndpointRequest = req
             .parse_json()
@@ -344,16 +474,23 @@ async fn create_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
         proxy::validate_endpoint_url(&body.url)?;
+        validate_headers(&body.headers)?;
+        validate_protocol(&body.protocol)?;
+
+        let headers = serde_json::to_value(&body.headers)
+            .map_err(|e| AppError::internal(format!("encode headers: {e}")))?;
 
         let mut db = st.db.clone_inner();
         let row = toasty::create!(RpcEndpoint {
             chain_index: body.chain_index,
             url: &body.url,
+            protocol: &body.protocol,
             weight: body.weight,
             enabled: body.enabled,
             tier: &body.tier,
             is_archive: body.is_archive,
             priority: body.priority,
+            headers: &headers,
         })
         .exec(&mut db)
         .await
@@ -376,7 +513,7 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let id_str: String = req
             .param("id")
@@ -392,6 +529,12 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         if let Some(url) = &body.url {
             proxy::validate_endpoint_url(url)?;
         }
+        if let Some(headers) = &body.headers {
+            validate_headers(headers)?;
+        }
+        if let Some(protocol) = &body.protocol {
+            validate_protocol(protocol)?;
+        }
 
         let mut db = st.db.clone_inner();
         let mut row: RpcEndpoint = RpcEndpoint::get_by_id(&mut db, &id)
@@ -402,6 +545,9 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         let mut upd = row.update();
         if let Some(url) = &body.url {
             upd = upd.url(url);
+        }
+        if let Some(protocol) = &body.protocol {
+            upd = upd.protocol(protocol);
         }
         if let Some(weight) = body.weight {
             upd = upd.weight(weight);
@@ -417,6 +563,11 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         }
         if let Some(priority) = body.priority {
             upd = upd.priority(priority);
+        }
+        if let Some(headers) = &body.headers {
+            let headers = serde_json::to_value(headers)
+                .map_err(|e| AppError::internal(format!("encode headers: {e}")))?;
+            upd = upd.headers(&headers);
         }
         upd.exec(&mut db)
             .await
@@ -443,7 +594,7 @@ async fn delete_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let id_str: String = req
             .param("id")
@@ -481,7 +632,7 @@ async fn sync_free_endpoints(req: &mut Request, depot: &mut Depot, res: &mut Res
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let syncer = FreeRpcSyncer::new(st.db.clone(), st.http.clone());
         let chain_index: Option<i64> = req.query("chain_index");
@@ -522,7 +673,7 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let api_key: Option<String> = req.query("api_key");
         let chain_index: Option<i64> = req.query("chain_index");
@@ -613,7 +764,7 @@ async fn list_settings(req: &mut Request, depot: &mut Depot, res: &mut Response)
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let mut db = st.db.clone_inner();
         let rows: Vec<GatewaySettings> = GatewaySettings::all()
@@ -636,7 +787,7 @@ async fn update_setting(req: &mut Request, depot: &mut Depot, res: &mut Response
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         let key: String = req
             .param("key")
@@ -677,7 +828,7 @@ async fn create_setting(req: &mut Request, depot: &mut Depot, res: &mut Response
         let st = depot
             .get_typed::<Gw>()
             .map_err(|_| AppError::internal("state missing"))?;
-        require_admin(req, depot, &st.admin_key)?;
+        require_admin(req, depot, st)?;
 
         #[derive(Deserialize)]
         struct CreateSetting {
@@ -714,6 +865,7 @@ async fn create_setting(req: &mut Request, depot: &mut Depot, res: &mut Response
 
 pub fn admin_router() -> Router {
     Router::with_path("admin")
+        .push(Router::with_path("login").post(login))
         .push(Router::with_path("keys").get(list_keys).post(create_key))
         .push(
             Router::with_path("keys/{id}")
@@ -738,4 +890,30 @@ pub fn admin_router() -> Router {
                 .post(create_setting),
         )
         .push(Router::with_path("settings/{key}").put(update_setting))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sign_token, verify_token};
+
+    #[test]
+    fn token_roundtrip() {
+        let token = sign_token("secret", "admin");
+        assert_eq!(verify_token("secret", &token).as_deref(), Some("admin"));
+    }
+
+    #[test]
+    fn token_rejects_wrong_secret() {
+        let token = sign_token("secret", "admin");
+        assert!(verify_token("wrong", &token).is_none());
+    }
+
+    #[test]
+    fn token_rejects_tampered() {
+        let token = sign_token("secret", "admin");
+        let mut tampered = token;
+        let dot = tampered.find('.').unwrap();
+        tampered.replace_range(dot + 1.., "AAAA");
+        assert!(verify_token("secret", &tampered).is_none());
+    }
 }

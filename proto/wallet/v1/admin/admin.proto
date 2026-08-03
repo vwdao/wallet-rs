@@ -34,6 +34,8 @@ message RpcEndpoint {
   string url = 3;
   uint32 weight = 4;
   bool enabled = 5;
+  map<string, string> headers = 6;
+  string protocol = 7;
 }
 
 message ListEndpointsRequest {
