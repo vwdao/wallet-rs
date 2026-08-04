@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { CHAIN_OPTIONS, chainName } from '../lib/chains.js'
 import { headersFromText, headersToText } from '../lib/headers.js'
 import { Button } from './ui/Button.jsx'
 import { Field } from './ui/Field.jsx'
@@ -58,8 +59,13 @@ export function EndpointModal({ open, endpoint, api, onClose, onSaved }) {
     setSaving(true)
 
     try {
+      const chainIndex = Number(form.chain_index)
+      if (!Number.isFinite(chainIndex) || form.chain_index === '') {
+        throw new Error('请选择链')
+      }
+
       const body = {
-        chain_index: Number(form.chain_index) || 60,
+        chain_index: chainIndex,
         url: form.url.trim(),
         protocol: form.protocol || '',
         weight: Number(form.weight) || 1,
@@ -104,13 +110,26 @@ export function EndpointModal({ open, endpoint, api, onClose, onSaved }) {
     >
       <form id="endpoint-form" onSubmit={handleSubmit}>
         <div className="form-grid">
-          <Field label="链索引">
-            <input
-              type="number"
-              placeholder="60 (ETH)"
-              value={form.chain_index}
+          <Field label="链" hint={form.id ? '创建后不可修改' : undefined}>
+            <select
+              required
+              disabled={Boolean(form.id)}
+              value={form.chain_index === '' ? '' : String(form.chain_index)}
               onChange={(event) => update('chain_index', event.target.value)}
-            />
+            >
+              <option value="">请选择链</option>
+              {CHAIN_OPTIONS.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name} ({item.id})
+                </option>
+              ))}
+              {form.chain_index !== ''
+                && !CHAIN_OPTIONS.some((item) => item.id === Number(form.chain_index)) ? (
+                  <option value={String(form.chain_index)}>
+                    {chainName(form.chain_index)} ({form.chain_index})
+                  </option>
+                ) : null}
+            </select>
           </Field>
           <Field label="优先级">
             <input

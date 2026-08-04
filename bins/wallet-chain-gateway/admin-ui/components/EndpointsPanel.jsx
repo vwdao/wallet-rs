@@ -1,17 +1,35 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { chainName } from '../lib/chains.js'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { CHAIN_OPTIONS, chainName } from '../lib/chains.js'
 import { EndpointModal } from './EndpointModal.jsx'
 import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
 import { ConfirmDialog } from './ui/ConfirmDialog.jsx'
 import { Empty } from './ui/Empty.jsx'
 
+const PROTOCOL_OPTIONS = [
+  { value: 'http', label: 'http' },
+  { value: 'ws', label: 'ws' },
+  { value: 'grpc', label: 'grpc' },
+  { value: 'tcp', label: 'tcp' },
+]
+
+function normalizeProtocol(protocol) {
+  const value = String(protocol || '').trim().toLowerCase()
+  if (!value) return ''
+  if (value === 'https') return 'http'
+  if (value === 'wss') return 'ws'
+  if (value === 'grpcs') return 'grpc'
+  return value
+}
+
 export function EndpointsPanel({ api }) {
   const [endpoints, setEndpoints] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [chainFilter, setChainFilter] = useState('')
+  const [protocolFilter, setProtocolFilter] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editingEndpoint, setEditingEndpoint] = useState(null)
   const [pendingDisable, setPendingDisable] = useState(null)
@@ -32,6 +50,29 @@ export function EndpointsPanel({ api }) {
   useEffect(() => {
     loadEndpoints()
   }, [loadEndpoints])
+
+  const chainChoices = useMemo(() => {
+    const fromData = [
+      ...new Set(endpoints.map((row) => Number(row.chain_index)).filter(Number.isFinite)),
+    ]
+    const known = new Map(CHAIN_OPTIONS.map((item) => [item.id, item]))
+    for (const id of fromData) {
+      if (!known.has(id)) known.set(id, { id, name: chainName(id) })
+    }
+    return [...known.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [endpoints])
+
+  const filteredEndpoints = useMemo(() => {
+    return endpoints.filter((endpoint) => {
+      if (chainFilter !== '' && Number(endpoint.chain_index) !== Number(chainFilter)) {
+        return false
+      }
+      if (protocolFilter !== '' && normalizeProtocol(endpoint.protocol) !== protocolFilter) {
+        return false
+      }
+      return true
+    })
+  }, [endpoints, chainFilter, protocolFilter])
 
   function openCreate() {
     setEditingEndpoint(null)
@@ -89,7 +130,39 @@ export function EndpointsPanel({ api }) {
     <>
       <div className="toolbar">
         <h2>RPC 节点</h2>
-        <Button onClick={openCreate}>+ 新增节点</Button>
+        <div className="stats-filters">
+          <label className="stats-filter">
+            <span>链</span>
+            <select
+              value={chainFilter}
+              onChange={(event) => setChainFilter(event.target.value)}
+              aria-label="按链筛选"
+            >
+              <option value="">全部链</option>
+              {chainChoices.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {item.name} ({item.id})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="stats-filter">
+            <span>协议</span>
+            <select
+              value={protocolFilter}
+              onChange={(event) => setProtocolFilter(event.target.value)}
+              aria-label="按协议筛选"
+            >
+              <option value="">全部协议</option>
+              {PROTOCOL_OPTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button onClick={openCreate}>+ 新增节点</Button>
+        </div>
       </div>
 
       {error ? <div className="alert danger" role="alert">{error}</div> : null}
@@ -98,6 +171,8 @@ export function EndpointsPanel({ api }) {
         <Empty>正在加载节点…</Empty>
       ) : endpoints.length === 0 ? (
         <Empty>暂无 RPC 节点</Empty>
+      ) : filteredEndpoints.length === 0 ? (
+        <Empty>没有匹配的 RPC 节点</Empty>
       ) : (
         <div className="table-wrap">
           <table>
@@ -105,6 +180,7 @@ export function EndpointsPanel({ api }) {
               <tr>
                 <th>链</th>
                 <th>URL</th>
+                <th>协议</th>
                 <th>层级</th>
                 <th>归档</th>
                 <th>优先级</th>
@@ -116,10 +192,11 @@ export function EndpointsPanel({ api }) {
               </tr>
             </thead>
             <tbody>
-              {endpoints.map((endpoint) => (
+              {filteredEndpoints.map((endpoint) => (
                 <tr key={endpoint.id}>
                   <td><Badge>{chainName(endpoint.chain_index)}</Badge></td>
                   <td className="url" title={endpoint.url}>{endpoint.url}</td>
+                  <td>{normalizeProtocol(endpoint.protocol) || '自动'}</td>
                   <td>
                     <Badge tone={endpoint.tier === 'paid' ? 'yellow' : 'green'}>
                       {endpoint.tier === 'paid' ? '付费' : '免费'}
