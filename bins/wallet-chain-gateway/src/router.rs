@@ -299,7 +299,7 @@ impl RpcRouter {
         timeout: Duration,
         max_retries: u32,
         max_block_lag: i64,
-    ) -> AppResult<serde_json::Value> {
+    ) -> AppResult<(String, serde_json::Value)> {
         let method = body.get("method").and_then(|v| v.as_str());
 
         let mut last_err = None;
@@ -340,7 +340,7 @@ impl RpcRouter {
             {
                 Ok(v) => {
                     self.mark_success(url);
-                    return Ok(v);
+                    return Ok((url.clone(), v));
                 }
                 Err(e) => {
                     self.mark_failure(url);

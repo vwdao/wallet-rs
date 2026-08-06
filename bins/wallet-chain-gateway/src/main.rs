@@ -221,15 +221,12 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
-        if cfg.log_requests {
-            tracing::info!(
-                api_key = %api_key,
-                chain = %chain,
-                chain_index,
-                method = body.get("method").and_then(|v| v.as_str()).unwrap_or("unknown"),
-                "proxy request"
-            );
-        }
+        let method = body
+            .get("method")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+        let params = body.get("params").cloned().unwrap_or(Value::Null);
+        let id = body.get("id").cloned().unwrap_or(Value::Null);
 
         let next_total_requests = key_row.total_requests.saturating_add(1);
         let mut counter_db = st.db.clone_inner();
@@ -254,36 +251,38 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await;
         let latency = start.elapsed().as_millis() as i32;
 
-        let method = body
-            .get("method")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
         let client_ip = client_ip_of(req);
 
-        match &rpc_result {
-            Ok(_) => {
-                st.stats.record(stats::StatsEvent {
-                    api_key: api_key.clone(),
-                    chain_index,
-                    client_ip: client_ip.clone(),
-                    method,
-                    status_code: 200,
-                    latency_ms: latency,
-                    error_msg: None,
-                });
-            }
-            Err(e) => {
-                st.stats.record(stats::StatsEvent {
-                    api_key: api_key.clone(),
-                    chain_index,
-                    client_ip: client_ip.clone(),
-                    method,
-                    status_code: 503,
-                    latency_ms: latency,
-                    error_msg: Some(e.to_string()),
-                });
-            }
+        let (upstream_url, status_code, error_msg, rpc_result) = match rpc_result {
+            Ok((url, v)) => (Some(url), 200, None, Ok(v)),
+            Err(e) => (None, 503, Some(e.to_string()), Err(e)),
+        };
+
+        st.stats.record(stats::StatsEvent {
+            api_key: api_key.clone(),
+            chain_index,
+            client_ip: client_ip.clone(),
+            method: method.clone(),
+            status_code,
+            latency_ms: latency,
+            error_msg,
+        });
+
+        if cfg.log_requests {
+            let log = serde_json::json!({
+                "type": "proxy_request",
+                "method": method,
+                "params": params,
+                "id": id,
+                "api_key": api_key,
+                "chain": chain,
+                "chain_index": chain_index,
+                "upstream_url": upstream_url,
+                "status_code": status_code,
+                "latency_ms": latency,
+                "client_ip": client_ip,
+            });
+            tracing::info!(log = %log, "proxy request");
         }
 
         let v = rpc_result?;
