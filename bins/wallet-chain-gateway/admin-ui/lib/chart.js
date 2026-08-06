@@ -9,6 +9,20 @@ export function compact(value) {
   return String(Math.round(value))
 }
 
+const hitMap = new WeakMap()
+
+export function getChartHits(canvas) {
+  return hitMap.get(canvas) || []
+}
+
+export function formatTimeLabel(ts, bucketSeconds) {
+  const date = new Date(ts * 1000)
+  if (bucketSeconds >= 3600) {
+    return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:00`
+  }
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
 function chartColors(canvas) {
   const root = canvas.ownerDocument?.documentElement
   const styles = root && typeof getComputedStyle === 'function'
@@ -22,6 +36,7 @@ function chartColors(canvas) {
     green: color('--green', '#22c55e'),
     red: color('--red', '#ef4444'),
     yellow: color('--yellow', '#eab308'),
+    text: color('--text', '#e8eef9'),
   }
 }
 
@@ -37,10 +52,16 @@ export function drawStatsChart(canvas, data, visibility = {}) {
     return sum + success + error
   }, 0)
   const hasLatency = showLatency && points.some((point) => Number(point.avg_latency_ms || 0) > 0)
-  if (!total && !hasLatency) return false
+  if (!total && !hasLatency) {
+    hitMap.set(canvas, [])
+    return false
+  }
 
   const context = canvas.getContext('2d')
-  if (!context) return false
+  if (!context) {
+    hitMap.set(canvas, [])
+    return false
+  }
 
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const rect = canvas.getBoundingClientRect()
@@ -75,6 +96,23 @@ export function drawStatsChart(canvas, data, visibility = {}) {
     : padding.left + chartWidth / 2
   const y = (value) => padding.top + chartHeight - chartHeight * (value / maxRequests)
   const latencyY = (value) => padding.top + chartHeight - chartHeight * (value / maxLatency)
+
+  const hits = points.map((point, index) => {
+    const half = slot / 2
+    return {
+      x: x(index) - half,
+      y: padding.top,
+      w: slot,
+      h: chartHeight,
+      payload: {
+        ts: point.ts,
+        success: Number(point.success || 0),
+        error: Number(point.error || 0),
+        avg_latency_ms: Number(point.avg_latency_ms || 0),
+      },
+    }
+  })
+  hitMap.set(canvas, hits)
 
   context.strokeStyle = colors.grid
   context.fillStyle = colors.muted
@@ -138,12 +176,7 @@ export function drawStatsChart(canvas, data, visibility = {}) {
   const labelStep = Math.max(1, Math.ceil(count / 8))
   points.forEach((point, index) => {
     if (index % labelStep !== 0 && index !== count - 1) return
-    const date = new Date(point.ts * 1000)
-    const longRange = data.bucket_seconds >= 3600
-    const label = longRange
-      ? `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:00`
-      : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-    context.fillText(label, x(index), padding.top + chartHeight + 8)
+    context.fillText(formatTimeLabel(point.ts, data.bucket_seconds), x(index), padding.top + chartHeight + 8)
   })
   context.textBaseline = 'alphabetic'
   return true
@@ -165,10 +198,16 @@ export function drawIpBarChart(canvas, data, visibility = {}) {
     const error = showError ? Number(item.error_count || 0) : 0
     return sum + success + error
   }, 0)
-  if (!total) return false
+  if (!total) {
+    hitMap.set(canvas, [])
+    return false
+  }
 
   const context = canvas.getContext('2d')
-  if (!context) return false
+  if (!context) {
+    hitMap.set(canvas, [])
+    return false
+  }
 
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
   const rect = canvas.getBoundingClientRect()
@@ -198,6 +237,21 @@ export function drawIpBarChart(canvas, data, visibility = {}) {
   const barWidth = Math.max(10, Math.min(42, slot * 0.55))
   const x = (index) => padding.left + slot * index + slot / 2
   const y = (value) => padding.top + chartHeight - chartHeight * (value / maxRequests)
+
+  const hits = items.map((item, index) => ({
+    x: padding.left + slot * index,
+    y: padding.top,
+    w: slot,
+    h: chartHeight,
+    payload: {
+      client_ip: item.client_ip,
+      total_requests: Number(item.total_requests || 0),
+      success_count: Number(item.success_count || 0),
+      error_count: Number(item.error_count || 0),
+      avg_latency_ms: Number(item.avg_latency_ms || 0),
+    },
+  }))
+  hitMap.set(canvas, hits)
 
   context.strokeStyle = colors.grid
   context.fillStyle = colors.muted
@@ -239,6 +293,120 @@ export function drawIpBarChart(canvas, data, visibility = {}) {
     context.fillText(compact(success + error), xx, top - 4)
   })
 
+  context.textBaseline = 'alphabetic'
+  return true
+}
+
+export function drawMethodsBarChart(canvas, data, visibility = {}) {
+  const showSuccess = visibility.success !== false
+  const showError = visibility.error !== false
+
+  const items = Array.isArray(data?.items) ? data.items : []
+  const total = items.reduce((sum, item) => {
+    const success = showSuccess ? Number(item.success_count || 0) : 0
+    const error = showError ? Number(item.error_count || 0) : 0
+    return sum + success + error
+  }, 0)
+  if (!total) {
+    hitMap.set(canvas, [])
+    return false
+  }
+
+  const context = canvas.getContext('2d')
+  if (!context) {
+    hitMap.set(canvas, [])
+    return false
+  }
+
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
+  const rect = canvas.getBoundingClientRect()
+  canvas.width = Math.max(300, Math.floor(rect.width * dpr))
+  canvas.height = Math.max(120, Math.floor(rect.height * dpr))
+  context.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+  const width = canvas.width / dpr
+  const height = canvas.height / dpr
+  const colors = chartColors(canvas)
+  context.clearRect(0, 0, width, height)
+  context.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'
+
+  const padding = { left: 230, right: 16, top: 14, bottom: 22 }
+  const chartWidth = width - padding.left - padding.right
+  const chartHeight = height - padding.top - padding.bottom
+
+  let maxRequests = 0
+  items.forEach((item) => {
+    const success = showSuccess ? Number(item.success_count || 0) : 0
+    const error = showError ? Number(item.error_count || 0) : 0
+    maxRequests = Math.max(maxRequests, success + error)
+  })
+  maxRequests = Math.max(1, roundUp(maxRequests || 1))
+
+  const count = items.length
+  const rowHeight = chartHeight / count
+  const barX = padding.left
+  const barArea = chartWidth
+  const barLen = (value) => (barArea * value) / maxRequests
+  const barHeight = Math.max(6, Math.min(16, rowHeight * 0.5))
+  const rowY = (index) => padding.top + rowHeight * index + rowHeight / 2
+
+  for (let index = 0; index <= 4; index += 1) {
+    const value = (maxRequests * index) / 4
+    const xx = barX + barLen(value)
+    context.strokeStyle = colors.grid
+    context.beginPath()
+    context.moveTo(xx, padding.top)
+    context.lineTo(xx, height - padding.bottom)
+    context.stroke()
+    context.fillStyle = colors.muted
+    context.textAlign = 'center'
+    context.textBaseline = 'top'
+    context.fillText(compact(value), xx, height - padding.bottom + 6)
+  }
+
+  const hits = []
+  items.forEach((item, index) => {
+    const cy = rowY(index)
+    const success = showSuccess ? Number(item.success_count || 0) : 0
+    const error = showError ? Number(item.error_count || 0) : 0
+    const totalVal = success + error
+
+    context.fillStyle = colors.muted
+    context.textAlign = 'right'
+    context.textBaseline = 'middle'
+    context.fillText(truncateLabel(item.label, 32), barX - 10, cy)
+
+    if (showSuccess && success > 0) {
+      context.fillStyle = colors.green
+      context.fillRect(barX, cy - barHeight / 2, barLen(success), barHeight)
+    }
+    if (showError && error > 0) {
+      context.fillStyle = colors.red
+      context.fillRect(barX + barLen(success), cy - barHeight / 2, barLen(error), barHeight)
+    }
+
+    if (totalVal > 0) {
+      context.fillStyle = colors.text
+      context.textAlign = 'right'
+      context.fillText(compact(totalVal), barX + barLen(totalVal) - 6, cy)
+    }
+
+    hits.push({
+      x: 0,
+      y: padding.top + rowHeight * index,
+      w: width,
+      h: rowHeight,
+      payload: {
+        method: item.method,
+        chain_index: item.chain_index,
+        total_requests: Number(item.total_requests || 0),
+        success_count: Number(item.success_count || 0),
+        error_count: Number(item.error_count || 0),
+        avg_latency_ms: Number(item.avg_latency_ms || 0),
+      },
+    })
+  })
+  hitMap.set(canvas, hits)
   context.textBaseline = 'alphabetic'
   return true
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CHAIN_OPTIONS, chainName } from '../lib/chains.js'
 import { StatsChart } from './StatsChart.jsx'
 import { IpStatsChart } from './IpStatsChart.jsx'
+import { MethodsChart } from './MethodsChart.jsx'
 import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
 import { Empty } from './ui/Empty.jsx'
@@ -22,27 +23,35 @@ export function StatsPanel({ api }) {
   const [stats, setStats] = useState([])
   const [series, setSeries] = useState({ points: [], bucket_seconds: 300 })
   const [byIp, setByIp] = useState({ items: [] })
+  const [methods, setMethods] = useState({ items: [] })
   const [tableLoading, setTableLoading] = useState(true)
   const [chartLoading, setChartLoading] = useState(true)
   const [ipChartLoading, setIpChartLoading] = useState(true)
+  const [methodsLoading, setMethodsLoading] = useState(true)
   const [tableError, setTableError] = useState('')
   const [chartError, setChartError] = useState('')
   const [ipChartError, setIpChartError] = useState('')
+  const [methodsError, setMethodsError] = useState('')
   const seriesRequest = useRef(0)
   const ipRequest = useRef(0)
+  const methodsRequest = useRef(0)
 
   const loadTable = useCallback(async () => {
     setTableLoading(true)
     setTableError('')
     try {
-      const data = await api(withChainQuery('/admin/stats', chainIndex))
+      const path = withChainQuery(
+        `/admin/stats?range=${encodeURIComponent(range)}`,
+        chainIndex,
+      )
+      const data = await api(path)
       setStats(Array.isArray(data) ? data : [])
     } catch (loadError) {
       setTableError(loadError.message || '加载统计数据失败')
     } finally {
       setTableLoading(false)
     }
-  }, [api, chainIndex])
+  }, [api, chainIndex, range])
 
   const loadSeries = useCallback(async () => {
     const requestId = ++seriesRequest.current
@@ -88,6 +97,28 @@ export function StatsPanel({ api }) {
     }
   }, [api, range, chainIndex])
 
+  const loadMethods = useCallback(async () => {
+    const requestId = ++methodsRequest.current
+    setMethodsLoading(true)
+    setMethodsError('')
+    try {
+      const path = withChainQuery(
+        `/admin/stats/methods?range=${encodeURIComponent(range)}`,
+        chainIndex,
+      )
+      const data = await api(path)
+      if (requestId === methodsRequest.current) {
+        setMethods(data && typeof data === 'object' ? data : { items: [] })
+      }
+    } catch (loadError) {
+      if (requestId === methodsRequest.current) {
+        setMethodsError(loadError.message || '加载方法统计失败')
+      }
+    } finally {
+      if (requestId === methodsRequest.current) setMethodsLoading(false)
+    }
+  }, [api, range, chainIndex])
+
   useEffect(() => {
     loadTable()
   }, [loadTable])
@@ -99,6 +130,10 @@ export function StatsPanel({ api }) {
   useEffect(() => {
     loadByIp()
   }, [loadByIp])
+
+  useEffect(() => {
+    loadMethods()
+  }, [loadMethods])
 
   const summary = useMemo(() => {
     const totalRequests = stats.reduce((sum, row) => sum + Number(row.total_requests || 0), 0)
@@ -124,7 +159,7 @@ export function StatsPanel({ api }) {
   }, [stats])
 
   async function refresh() {
-    await Promise.allSettled([loadTable(), loadSeries(), loadByIp()])
+    await Promise.allSettled([loadTable(), loadSeries(), loadByIp(), loadMethods()])
   }
 
   return (
@@ -164,13 +199,15 @@ export function StatsPanel({ api }) {
         </div>
       </div>
 
-      {tableError || chartError || ipChartError ? (
+      {tableError || chartError || ipChartError || methodsError ? (
         <div className="alert danger" role="alert">
-          {[tableError, chartError, ipChartError].filter(Boolean).join('；')}
+          {[tableError, chartError, ipChartError, methodsError].filter(Boolean).join('；')}
         </div>
       ) : null}
 
       <StatsChart data={series} loading={chartLoading} />
+
+      <MethodsChart data={methods} loading={methodsLoading} />
 
       <IpStatsChart data={byIp} loading={ipChartLoading} />
 

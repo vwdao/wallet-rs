@@ -637,6 +637,57 @@ td.url {
   font-size: 13px;
 }
 
+.chart-tooltip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  min-width: 160px;
+  max-width: 240px;
+  padding: 10px 12px;
+  background: var(--elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.chart-tooltip-title {
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+
+.chart-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.chart-tooltip-row + .chart-tooltip-row,
+.chart-tooltip-divider + .chart-tooltip-row {
+  margin-top: 2px;
+}
+
+.chart-tooltip-divider {
+  border-top: 1px solid var(--border);
+  margin: 6px 0;
+}
+
+.chart-tooltip-label {
+  color: var(--muted);
+  min-width: 0;
+  word-break: break-all;
+}
+
+.chart-tooltip-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text);
+}
+
 /* Utilities */
 .alert {
   padding: 10px 14px;

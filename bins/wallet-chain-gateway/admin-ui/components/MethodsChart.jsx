@@ -1,21 +1,30 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { drawIpBarChart, getChartHits } from '../lib/chart.js'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { drawMethodsBarChart, getChartHits } from '../lib/chart.js'
+import { chainName } from '../lib/chains.js'
 import { ChartTooltip } from './ui/ChartTooltip.jsx'
 
 const DEFAULT_VISIBILITY = { success: true, error: true }
 
-export function IpStatsChart({ data, loading = false }) {
+export function MethodsChart({ data, loading = false }) {
   const canvasRef = useRef(null)
   const [empty, setEmpty] = useState(true)
   const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY)
   const [tooltip, setTooltip] = useState(null)
 
+  const chartData = useMemo(() => ({
+    ...(data || {}),
+    items: (Array.isArray(data?.items) ? data.items : []).map((item) => ({
+      ...item,
+      label: `${item.method} · ${chainName(item.chain_index)}`,
+    })),
+  }), [data])
+
   const draw = useCallback(() => {
     if (!canvasRef.current) return
-    setEmpty(!drawIpBarChart(canvasRef.current, data, visibility))
-  }, [data, visibility])
+    setEmpty(!drawMethodsBarChart(canvasRef.current, chartData, visibility))
+  }, [chartData, visibility])
 
   useEffect(() => {
     draw()
@@ -53,8 +62,9 @@ export function IpStatsChart({ data, loading = false }) {
     setTooltip({
       x: event.clientX,
       y: event.clientY,
-      title: item.client_ip,
+      title: item.method,
       rows: [
+        { label: '链', value: chainName(item.chain_index) },
         { label: '总请求', value: item.total_requests },
         { label: '成功', value: item.success_count, color: 'var(--green)' },
         { label: '错误', value: item.error_count, color: 'var(--red)' },
@@ -73,18 +83,18 @@ export function IpStatsChart({ data, loading = false }) {
       aria-busy={loading}
       style={{ opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s' }}
     >
-      <div className="chart-title">按客户端 IP 请求量（Top 12）</div>
+      <div className="chart-title">Top 10 RPC 方法</div>
       <canvas
         ref={canvasRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        aria-label="按客户端 IP 的请求量柱状图"
-        style={{ display: empty || loading ? 'none' : 'block', width: '100%', height: 280 }}
+        aria-label="Top 10 RPC 方法请求量柱状图"
+        style={{ display: empty || loading ? 'none' : 'block', width: '100%', height: 300 }}
       />
       {loading ? (
-        <div className="chart-empty">正在加载 IP 统计…</div>
+        <div className="chart-empty">正在加载方法统计…</div>
       ) : empty ? (
-        <div className="chart-empty">所选时间范围内暂无 IP 请求数据</div>
+        <div className="chart-empty">所选时间范围内暂无方法统计数据</div>
       ) : null}
       <div className="chart-legend" role="group" aria-label="图例显隐">
         <button

@@ -803,6 +803,13 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         if let Some(ci) = chain_index {
             q = q.filter(ChainGatewayStats::fields().chain_index().eq(ci));
         }
+        if let Some(range) = req.query::<String>("range") {
+            let (duration_secs, _) = parse_stats_range(&range)?;
+            let cutoff = jiff::Timestamp::now()
+                .checked_sub(jiff::Span::new().seconds(duration_secs))
+                .map_err(|e| AppError::internal(e.to_string()))?;
+            q = q.filter(ChainGatewayStats::fields().created_at().ge(cutoff));
+        }
 
         let rows: Vec<ChainGatewayStats> = q
             .limit(limit as usize)
@@ -861,11 +868,20 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
 }
 
 #[derive(Serialize)]
+struct StatsMethodAgg {
+    method: String,
+    chain_index: i64,
+    total_requests: i64,
+    error_count: i64,
+}
+
+#[derive(Serialize)]
 struct StatsSeriesPoint {
     ts: i64,
     success: i64,
     error: i64,
     avg_latency_ms: f64,
+    methods: Vec<StatsMethodAgg>,
 }
 
 #[derive(Serialize)]
@@ -909,15 +925,26 @@ async fn get_stats_series(req: &mut Request, depot: &mut Depot, res: &mut Respon
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
 
-        let mut buckets: BTreeMap<i64, (i64, i64, i64)> = BTreeMap::new();
+        let mut buckets: BTreeMap<
+            i64,
+            (i64, i64, i64, std::collections::HashMap<(String, i64), (i64, i64)>),
+        > = BTreeMap::new();
         for row in &rows {
             let bucket = (row.created_at.as_second() / bucket_secs) * bucket_secs;
-            let entry = buckets.entry(bucket).or_insert((0, 0, 0));
+            let entry = buckets
+                .entry(bucket)
+                .or_insert((0, 0, 0, std::collections::HashMap::new()));
             entry.0 += 1;
             if row.status_code >= 400 {
                 entry.1 += 1;
             }
             entry.2 += row.latency_ms as i64;
+            let method = row.method.clone().unwrap_or_else(|| "unknown".to_string());
+            let method_entry = entry.3.entry((method, row.chain_index)).or_insert((0, 0));
+            method_entry.0 += 1;
+            if row.status_code >= 400 {
+                method_entry.1 += 1;
+            }
         }
 
         let first_bucket = (cutoff.as_second() / bucket_secs) * bucket_secs;
@@ -925,7 +952,28 @@ async fn get_stats_series(req: &mut Request, depot: &mut Depot, res: &mut Respon
         let mut points = Vec::new();
         let mut bucket = first_bucket;
         while bucket <= last_bucket {
-            let (total, errors, total_latency) = buckets.get(&bucket).copied().unwrap_or((0, 0, 0));
+            let bucket_data = buckets.get(&bucket);
+            let mut method_aggs: Vec<StatsMethodAgg> = Vec::new();
+            let (total, errors, total_latency) = match bucket_data {
+                Some(b) => {
+                    method_aggs = b
+                        .3
+                        .iter()
+                        .map(
+                            |((method, chain_index), (count, error_count))| StatsMethodAgg {
+                                method: method.clone(),
+                                chain_index: *chain_index,
+                                total_requests: *count,
+                                error_count: *error_count,
+                            },
+                        )
+                        .collect();
+                    (b.0, b.1, b.2)
+                }
+                None => (0, 0, 0),
+            };
+            method_aggs.sort_by(|a, b| b.total_requests.cmp(&a.total_requests));
+            method_aggs.truncate(10);
             points.push(StatsSeriesPoint {
                 ts: bucket,
                 success: total - errors,
@@ -935,6 +983,7 @@ async fn get_stats_series(req: &mut Request, depot: &mut Depot, res: &mut Respon
                 } else {
                     0.0
                 },
+                methods: method_aggs,
             });
             bucket += bucket_secs;
         }
@@ -1055,6 +1104,108 @@ async fn get_stats_by_ip(req: &mut Request, depot: &mut Depot, res: &mut Respons
         items.truncate(limit);
 
         Ok(Json(StatsByIp { range, items }))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
+    }
+}
+
+#[derive(Serialize)]
+struct StatsMethodsItem {
+    method: String,
+    chain_index: i64,
+    total_requests: i64,
+    success_count: i64,
+    error_count: i64,
+    avg_latency_ms: f64,
+}
+
+#[derive(Serialize)]
+struct StatsMethods {
+    range: String,
+    items: Vec<StatsMethodsItem>,
+}
+
+#[handler]
+async fn get_stats_methods(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<StatsMethods>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, st)?;
+
+        let range: String = req.query("range").unwrap_or_else(|| "1h".into());
+        let api_key: Option<String> = req.query("api_key");
+        let chain_index: Option<i64> = req.query("chain_index");
+        let limit_raw: i64 = req.query("limit").unwrap_or(10);
+        let limit = limit_raw.clamp(1, 50) as usize;
+
+        let (duration_secs, _) = parse_stats_range(&range)?;
+        let now = jiff::Timestamp::now();
+        let cutoff = now
+            .checked_sub(jiff::Span::new().seconds(duration_secs))
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut q = ChainGatewayStats::all()
+            .filter(ChainGatewayStats::fields().created_at().ge(cutoff));
+        if let Some(key) = &api_key {
+            q = q.filter(ChainGatewayStats::fields().api_key().eq(key));
+        }
+        if let Some(ci) = chain_index {
+            q = q.filter(ChainGatewayStats::fields().chain_index().eq(ci));
+        }
+
+        let mut db = st.db.clone_inner();
+        let rows: Vec<ChainGatewayStats> = q
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut map: std::collections::HashMap<(String, i64), (i64, i64, i64)> =
+            std::collections::HashMap::new();
+        for row in &rows {
+            let method = row
+                .method
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("未知")
+                .to_string();
+            let entry = map.entry((method, row.chain_index)).or_insert((0, 0, 0));
+            entry.0 += 1;
+            if row.status_code >= 400 {
+                entry.1 += 1;
+            }
+            entry.2 += row.latency_ms as i64;
+        }
+
+        let mut items: Vec<StatsMethodsItem> = map
+            .into_iter()
+            .map(
+                |((method, chain_index), (total, errors, total_latency))| StatsMethodsItem {
+                    method,
+                    chain_index,
+                    total_requests: total,
+                    success_count: total - errors,
+                    error_count: errors,
+                    avg_latency_ms: if total > 0 {
+                        total_latency as f64 / total as f64
+                    } else {
+                        0.0
+                    },
+                },
+            )
+            .collect();
+        items.sort_by(|a, b| {
+            b.total_requests
+                .cmp(&a.total_requests)
+                .then_with(|| a.method.cmp(&b.method))
+        });
+        items.truncate(limit);
+
+        Ok(Json(StatsMethods { range, items }))
     }
     .await;
     match result {
@@ -1215,6 +1366,7 @@ pub fn admin_router() -> Router {
         )
         .push(Router::with_path("stats/series").get(get_stats_series))
         .push(Router::with_path("stats/by-ip").get(get_stats_by_ip))
+        .push(Router::with_path("stats/methods").get(get_stats_methods))
         .push(Router::with_path("stats").get(get_stats))
         .push(
             Router::with_path("settings")
