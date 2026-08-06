@@ -14,6 +14,7 @@ use wallet_error::AppError;
 
 mod admin;
 mod free_rpc;
+mod grpc_proxy;
 mod health;
 mod protocol;
 mod proxy;
@@ -93,6 +94,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         settings_handle.clone(),
     );
     health_checker.spawn();
+
+    if let Some(grpc_listen) = cfg.grpc_listen.clone().filter(|s| !s.is_empty()) {
+        match grpc_listen.parse::<SocketAddr>() {
+            Ok(addr) => grpc_proxy::spawn(state.clone(), addr),
+            Err(e) => tracing::error!("invalid grpc_listen {grpc_listen}: {e}"),
+        }
+    }
 
     {
         let syncer = free_rpc::FreeRpcSyncer::new(db.clone(), http.clone());

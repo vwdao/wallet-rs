@@ -74,6 +74,8 @@ pub struct RpcEndpoint {
     #[default(false)]
     pub is_archive: bool,
 
+    pub archive_checked_at: Option<jiff::Timestamp>,
+
     #[default(0)]
     pub priority: i32,
 

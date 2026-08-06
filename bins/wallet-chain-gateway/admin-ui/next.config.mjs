@@ -10,6 +10,7 @@ const nextConfig = {
       { source: '/admin/login', destination: `${gateway}/admin/login`, basePath: false },
       { source: '/admin/endpoints', destination: `${gateway}/admin/endpoints`, basePath: false },
       { source: '/admin/endpoints/:path*', destination: `${gateway}/admin/endpoints/:path*`, basePath: false },
+      { source: '/admin/networks', destination: `${gateway}/admin/networks`, basePath: false },
       { source: '/admin/keys', destination: `${gateway}/admin/keys`, basePath: false },
       { source: '/admin/keys/:path*', destination: `${gateway}/admin/keys/:path*`, basePath: false },
       { source: '/admin/stats', destination: `${gateway}/admin/stats`, basePath: false },

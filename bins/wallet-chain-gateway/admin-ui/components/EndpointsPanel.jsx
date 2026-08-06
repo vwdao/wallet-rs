@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CHAIN_OPTIONS, chainName } from '../lib/chains.js'
+import { chainName } from '../lib/chains.js'
+import { mergeChainOptions, normalizeProtocol } from '../lib/networks.js'
 import { EndpointModal } from './EndpointModal.jsx'
 import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
@@ -15,15 +16,6 @@ const PROTOCOL_OPTIONS = [
   { value: 'tcp', label: 'tcp' },
 ]
 
-function normalizeProtocol(protocol) {
-  const value = String(protocol || '').trim().toLowerCase()
-  if (!value) return ''
-  if (value === 'https') return 'http'
-  if (value === 'wss') return 'ws'
-  if (value === 'grpcs') return 'grpc'
-  return value
-}
-
 export function EndpointsPanel({ api }) {
   const [endpoints, setEndpoints] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +25,15 @@ export function EndpointsPanel({ api }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingEndpoint, setEditingEndpoint] = useState(null)
   const [pendingDisable, setPendingDisable] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
   const [togglingId, setTogglingId] = useState(null)
+  const [networks, setNetworks] = useState([])
+
+  useEffect(() => {
+    api('/admin/networks')
+      .then((data) => setNetworks(Array.isArray(data) ? data : []))
+      .catch(() => setNetworks([]))
+  }, [api])
 
   const loadEndpoints = useCallback(async () => {
     setError('')
@@ -52,22 +52,22 @@ export function EndpointsPanel({ api }) {
   }, [loadEndpoints])
 
   const chainChoices = useMemo(() => {
+    const known = new Map(mergeChainOptions(networks).map((item) => [item.id, item]))
     const fromData = [
       ...new Set(endpoints.map((row) => Number(row.chain_index)).filter(Number.isFinite)),
     ]
-    const known = new Map(CHAIN_OPTIONS.map((item) => [item.id, item]))
     for (const id of fromData) {
       if (!known.has(id)) known.set(id, { id, name: chainName(id) })
     }
     return [...known.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [endpoints])
+  }, [endpoints, networks])
 
   const filteredEndpoints = useMemo(() => {
     return endpoints.filter((endpoint) => {
       if (chainFilter !== '' && Number(endpoint.chain_index) !== Number(chainFilter)) {
         return false
       }
-      if (protocolFilter !== '' && normalizeProtocol(endpoint.protocol) !== protocolFilter) {
+      if (protocolFilter !== '' && normalizeProtocol(endpoint.protocol, endpoint.url) !== protocolFilter) {
         return false
       }
       return true
@@ -100,11 +100,29 @@ export function EndpointsPanel({ api }) {
     setError('')
     setTogglingId(pendingDisable.id)
     try {
-      await api(`/admin/endpoints/${pendingDisable.id}`, { method: 'DELETE' })
+      await api(`/admin/endpoints/${pendingDisable.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: false }),
+      })
       setPendingDisable(null)
       await loadEndpoints()
     } catch (disableError) {
       setError(disableError.message || '禁用节点失败')
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setError('')
+    setTogglingId(pendingDelete.id)
+    try {
+      await api(`/admin/endpoints/${pendingDelete.id}`, { method: 'DELETE' })
+      setPendingDelete(null)
+      await loadEndpoints()
+    } catch (deleteError) {
+      setError(deleteError.message || '删除节点失败')
     } finally {
       setTogglingId(null)
     }
@@ -196,7 +214,7 @@ export function EndpointsPanel({ api }) {
                 <tr key={endpoint.id}>
                   <td><Badge>{chainName(endpoint.chain_index)}</Badge></td>
                   <td className="url" title={endpoint.url}>{endpoint.url}</td>
-                  <td>{normalizeProtocol(endpoint.protocol) || '自动'}</td>
+                  <td>{normalizeProtocol(endpoint.protocol, endpoint.url) || '自动'}</td>
                   <td>
                     <Badge tone={endpoint.tier === 'paid' ? 'yellow' : 'green'}>
                       {endpoint.tier === 'paid' ? '付费' : '免费'}
@@ -223,7 +241,7 @@ export function EndpointsPanel({ api }) {
                       </Button>
                       {endpoint.enabled ? (
                         <Button
-                          variant="danger"
+                          variant="ghost"
                           size="sm"
                           disabled={togglingId === endpoint.id}
                           onClick={() => setPendingDisable(endpoint)}
@@ -242,6 +260,14 @@ export function EndpointsPanel({ api }) {
                           启用
                         </Button>
                       )}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={togglingId === endpoint.id}
+                        onClick={() => setPendingDelete(endpoint)}
+                      >
+                        删除
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -270,6 +296,19 @@ export function EndpointsPanel({ api }) {
           if (!togglingId) setPendingDisable(null)
         }}
         onConfirm={confirmDisable}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="删除节点"
+        message={`确定要删除 ${pendingDelete ? chainName(pendingDelete.chain_index) : ''} 节点吗？删除后不可恢复。`}
+        detail={pendingDelete?.url}
+        confirmLabel="删除"
+        loading={Boolean(pendingDelete && togglingId === pendingDelete.id)}
+        onCancel={() => {
+          if (!togglingId) setPendingDelete(null)
+        }}
+        onConfirm={confirmDelete}
       />
     </>
   )

@@ -21,6 +21,7 @@ export function KeysPanel({ api }) {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingKey, setEditingKey] = useState(null)
   const [pendingDisable, setPendingDisable] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
   const [togglingId, setTogglingId] = useState(null)
 
   const loadKeys = useCallback(async () => {
@@ -65,11 +66,29 @@ export function KeysPanel({ api }) {
     setError('')
     setTogglingId(pendingDisable.id)
     try {
-      await api(`/admin/keys/${pendingDisable.id}`, { method: 'DELETE' })
+      await api(`/admin/keys/${pendingDisable.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ enabled: false }),
+      })
       setPendingDisable(null)
       await loadKeys()
     } catch (disableError) {
       setError(disableError.message || '禁用 API 密钥失败')
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setError('')
+    setTogglingId(pendingDelete.id)
+    try {
+      await api(`/admin/keys/${pendingDelete.id}`, { method: 'DELETE' })
+      setPendingDelete(null)
+      await loadKeys()
+    } catch (deleteError) {
+      setError(deleteError.message || '删除 API 密钥失败')
     } finally {
       setTogglingId(null)
     }
@@ -148,7 +167,7 @@ export function KeysPanel({ api }) {
                       </Button>
                       {apiKey.enabled ? (
                         <Button
-                          variant="danger"
+                          variant="ghost"
                           size="sm"
                           disabled={togglingId === apiKey.id}
                           onClick={() => setPendingDisable(apiKey)}
@@ -167,6 +186,14 @@ export function KeysPanel({ api }) {
                           启用
                         </Button>
                       )}
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={togglingId === apiKey.id}
+                        onClick={() => setPendingDelete(apiKey)}
+                      >
+                        删除
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -195,6 +222,19 @@ export function KeysPanel({ api }) {
           if (!togglingId) setPendingDisable(null)
         }}
         onConfirm={confirmDisable}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="删除 API 密钥"
+        message={`确定要删除「${pendingDelete?.name || ''}」吗？删除后不可恢复。`}
+        detail={pendingDelete?.api_key}
+        confirmLabel="删除"
+        loading={Boolean(pendingDelete && togglingId === pendingDelete.id)}
+        onCancel={() => {
+          if (!togglingId) setPendingDelete(null)
+        }}
+        onConfirm={confirmDelete}
       />
     </>
   )

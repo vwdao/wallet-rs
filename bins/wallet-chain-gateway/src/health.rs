@@ -6,13 +6,20 @@ use crate::settings::SettingsHandle;
 use crate::transports;
 
 const ARCHIVE_METHODS: &[&str] = &[
-    "debug_traceBlockByNumber",
-    "debug_traceBlockByHash",
-    "debug_traceTransaction",
     "trace_block",
     "trace_transaction",
     "trace_call",
-    "eth_getLogs",
+    "trace_callMany",
+    "trace_rawTransaction",
+    "trace_replayBlockTransactions",
+    "trace_replayTransaction",
+    "trace_filter",
+    "trace_get",
+    "debug_traceBlockByNumber",
+    "debug_traceBlockByHash",
+    "debug_traceTransaction",
+    "debug_traceCall",
+    "debug_storageRangeAt",
     "debug_getRawReceipts",
 ];
 
@@ -20,6 +27,29 @@ pub fn is_archive_method(method: &str) -> bool {
     ARCHIVE_METHODS
         .iter()
         .any(|m| m.eq_ignore_ascii_case(method))
+}
+
+const ARCHIVE_PROBE_ADDRESS: &str = "0x0000000000000000000000000000000000000000";
+const ARCHIVE_PROBE_BLOCK: &str = "0x1";
+const ARCHIVE_REPROBE_INTERVAL_HOURS: i64 = 6;
+
+async fn probe_archive_capability(
+    http: &reqwest::Client,
+    url: &str,
+    protocol: Option<crate::protocol::EndpointProtocol>,
+    headers: &crate::transports::EndpointHeaders,
+) -> bool {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_getBalance",
+        "params": [ARCHIVE_PROBE_ADDRESS, ARCHIVE_PROBE_BLOCK],
+    });
+    match transports::execute_unary(http, url, &body, protocol, headers, Duration::from_secs(5)).await
+    {
+        Ok(v) => v.get("result").is_some(),
+        Err(_) => false,
+    }
 }
 
 pub fn probe_method_for_chain(family: &str) -> &str {
@@ -107,18 +137,51 @@ impl HealthChecker {
                         Some(prev) => (prev + latency) / 2,
                         None => latency,
                     };
-                    ep.update()
+                    let endpoint_url = ep.url.clone();
+                    let chain_index = ep.chain_index;
+                    let previous_archive = ep.is_archive;
+                    let archive_checked_at = ep.archive_checked_at;
+                    let mut upd = ep
+                        .update()
                         .healthy(true)
                         .avg_latency_ms(Some(new_avg))
                         .error_count(0)
                         .block_height(block_height)
-                        .last_health_check(Some(jiff::Timestamp::now()))
-                        .exec(&mut db)
+                        .last_health_check(Some(jiff::Timestamp::now()));
+
+                    if family == "evm" {
+                        let stale = archive_checked_at.is_none_or(|t| {
+                            t.checked_add(jiff::Span::new().hours(ARCHIVE_REPROBE_INTERVAL_HOURS))
+                                .map_or(true, |deadline| jiff::Timestamp::now() >= deadline)
+                        });
+                        if stale {
+                            let is_archive = probe_archive_capability(
+                                &self.http,
+                                &endpoint_url,
+                                protocol,
+                                &headers,
+                            )
+                            .await;
+                            upd = upd
+                                .is_archive(is_archive)
+                                .archive_checked_at(Some(jiff::Timestamp::now()));
+                            if is_archive != previous_archive {
+                                tracing::info!(
+                                    endpoint = %endpoint_url,
+                                    chain = chain_index,
+                                    is_archive,
+                                    "evm archive capability detected"
+                                );
+                            }
+                        }
+                    }
+
+                    upd.exec(&mut db)
                         .await
                         .map_err(|e| wallet_error::AppError::internal(e.to_string()))?;
 
                     if let Some(h) = block_height {
-                        chain_heights.entry(ep.chain_index).or_default().push(h);
+                        chain_heights.entry(chain_index).or_default().push(h);
                     }
                 }
                 Err(_) => {
@@ -147,12 +210,12 @@ impl HealthChecker {
                 continue;
             }
             let max_height = heights.iter().copied().max().unwrap_or(0);
-            tracing::info!(
-                chain = chain_index,
-                max_height,
-                endpoints = heights.len(),
-                "block height consensus"
-            );
+            // tracing::info!(
+            //     chain = chain_index,
+            //     max_height,
+            //     endpoints = heights.len(),
+            //     "block height consensus"
+            // );
 
             let mut db = self.db.clone_inner();
             let eps: Vec<RpcEndpoint> = RpcEndpoint::filter(
@@ -188,5 +251,60 @@ impl HealthChecker {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_archive_method, ARCHIVE_METHODS};
+
+    #[test]
+    fn archive_methods_are_case_insensitive() {
+        assert!(is_archive_method("trace_block"));
+        assert!(is_archive_method("TRACE_TRANSACTION"));
+        assert!(is_archive_method("debug_traceTransaction"));
+        assert!(is_archive_method("debug_traceBlockByNumber"));
+        assert!(is_archive_method("trace_replayBlockTransactions"));
+    }
+
+    #[test]
+    fn non_archive_methods_are_not_matched() {
+        assert!(!is_archive_method("eth_blockNumber"));
+        assert!(!is_archive_method("eth_chainId"));
+        assert!(!is_archive_method("net_version"));
+        assert!(!is_archive_method("eth_getBalance"));
+        assert!(!is_archive_method("eth_call"));
+        assert!(!is_archive_method("eth_getLogs"));
+        assert!(!is_archive_method(""));
+    }
+
+    #[test]
+    fn archive_method_list_contains_trace_and_debug_methods() {
+        for method in [
+            "trace_block",
+            "trace_transaction",
+            "trace_call",
+            "trace_replayTransaction",
+            "trace_filter",
+            "debug_traceBlockByNumber",
+            "debug_traceTransaction",
+            "debug_traceCall",
+            "debug_getRawReceipts",
+        ] {
+            assert!(
+                ARCHIVE_METHODS.iter().any(|m| m.eq_ignore_ascii_case(method)),
+                "expected {method} to be listed as an archive method"
+            );
+        }
+    }
+
+    #[test]
+    fn non_archive_methods_are_not_listed() {
+        for method in ["eth_getBalance", "eth_call", "eth_getLogs", "eth_getStorageAt"] {
+            assert!(
+                !ARCHIVE_METHODS.iter().any(|m| m.eq_ignore_ascii_case(method)),
+                "{method} is not archive-only and should not be listed"
+            );
+        }
     }
 }

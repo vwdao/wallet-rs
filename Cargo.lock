@@ -5569,13 +5569,16 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.13.5",
+ "rustls-pemfile",
  "socket2 0.5.10",
  "tokio",
+ "tokio-rustls",
  "tokio-stream",
  "tower 0.4.13",
  "tower-layer",
  "tower-service",
  "tracing",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -6295,6 +6298,9 @@ dependencies = [
  "futures",
  "hmac 0.12.1",
  "http",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "jiff",
  "parking_lot",
  "rand 0.8.7",

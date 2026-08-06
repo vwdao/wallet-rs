@@ -4,8 +4,8 @@ use salvo::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use uuid::Uuid;
-use wallet_db::{ChainGatewayKey, ChainGatewayStats, GatewaySettings, RpcEndpoint};
-use wallet_error::AppError;
+use wallet_db::{ChainGatewayKey, ChainGatewayStats, GatewaySettings, Network, RpcEndpoint};
+use wallet_error::{AppError, AppResult};
 
 use crate::free_rpc::{ChainSyncResult, FreeRpcSyncer};
 use crate::proxy;
@@ -332,12 +332,12 @@ async fn delete_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .map_err(|_| AppError::InvalidArgument("invalid uuid".into()))?;
 
         let mut db = st.db.clone_inner();
-        let mut row: ChainGatewayKey = ChainGatewayKey::get_by_id(&mut db, &id)
+        ChainGatewayKey::get_by_id(&mut db, &id)
             .await
             .map_err(|_| AppError::NotFound("key not found".into()))?;
 
-        row.update()
-            .enabled(false)
+        ChainGatewayKey::filter(ChainGatewayKey::fields().id().eq(id))
+            .delete()
             .exec(&mut db)
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
@@ -351,7 +351,103 @@ async fn delete_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     }
 }
 
+// ─── Networks ─────────────────────────────────────────
+
+#[derive(Serialize)]
+struct NetworkResponse {
+    chain_index: i64,
+    name: String,
+    family: String,
+    evm_chain_id: Option<i64>,
+    enabled: bool,
+}
+
+impl NetworkResponse {
+    fn from_row(r: &Network) -> Self {
+        Self {
+            chain_index: r.chain_index,
+            name: r.name.clone(),
+            family: r.family.clone(),
+            evm_chain_id: r.evm_chain_id,
+            enabled: r.enabled,
+        }
+    }
+}
+
+#[handler]
+async fn list_networks(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<Vec<NetworkResponse>>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, st)?;
+
+        let mut db = st.db.clone_inner();
+        let rows: Vec<Network> = Network::all()
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        Ok(Json(rows.iter().map(NetworkResponse::from_row).collect()))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
+    }
+}
+
 // ─── Endpoints ─────────────────────────────────────────
+
+fn infer_network_meta(chain_index: i64) -> (String, &'static str) {
+    let (name, family) = match chain_index {
+        0 => ("BTC", "bitcoin"),
+        3 => ("DOGE", "evm"),
+        60 => ("ETH", "evm"),
+        133 => ("ZEC", "evm"),
+        195 => ("TRON", "tron"),
+        501 => ("SOL", "solana"),
+        966 => ("POL", "evm"),
+        8453 => ("BASE", "evm"),
+        20000714 => ("BSC", "evm"),
+        10042221 => ("ARB", "evm"),
+        10000070 => ("OP", "evm"),
+        10009000 => ("AVAX", "evm"),
+        10000999 => ("HYPER", "evm"),
+        10004663 => ("ROBIN", "evm"),
+        _ => ("", "evm"),
+    };
+    (name.to_string(), family)
+}
+
+async fn ensure_network(db: &wallet_db::Db, chain_index: i64) -> AppResult<Network> {
+    let mut inner = db.clone_inner();
+    let rows: Vec<Network> = Network::filter(Network::fields().chain_index().eq(chain_index))
+        .exec(&mut inner)
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
+    if let Some(network) = rows.into_iter().next() {
+        return Ok(network);
+    }
+
+    let (name, family) = infer_network_meta(chain_index);
+    let name = if name.is_empty() {
+        format!("Chain {chain_index}")
+    } else {
+        name
+    };
+
+    toasty::create!(Network {
+        chain_index,
+        name: &name,
+        family,
+        evm_chain_id: None,
+        enabled: true,
+    })
+    .exec(&mut inner)
+    .await
+    .map_err(|e| AppError::internal(e.to_string()))
+}
 
 #[derive(Serialize)]
 struct EndpointResponse {
@@ -444,8 +540,25 @@ async fn list_endpoints(req: &mut Request, depot: &mut Depot, res: &mut Response
             .map_err(|_| AppError::internal("state missing"))?;
         require_admin(req, depot, st)?;
 
+        let chain_index: Option<i64> = req.query("chain_index");
+        let protocol: Option<String> = req.query("protocol");
+
+        let mut q = RpcEndpoint::all();
+        if let Some(ci) = chain_index {
+            q = q.filter(RpcEndpoint::fields().chain_index().eq(ci));
+        }
+        if let Some(raw) = &protocol {
+            let normalized = raw.trim().to_ascii_lowercase();
+            if !normalized.is_empty() {
+                let stored = crate::protocol::EndpointProtocol::from_config_opt(&normalized)
+                    .map(|p| p.as_str().to_string())
+                    .unwrap_or(normalized);
+                q = q.filter(RpcEndpoint::fields().protocol().eq(stored.as_str()));
+            }
+        }
+
         let mut db = st.db.clone_inner();
-        let rows: Vec<RpcEndpoint> = RpcEndpoint::all()
+        let rows: Vec<RpcEndpoint> = q
             .exec(&mut db)
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
@@ -480,6 +593,7 @@ async fn create_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .map_err(|e| AppError::internal(format!("encode headers: {e}")))?;
 
         let mut db = st.db.clone_inner();
+        ensure_network(&st.db, body.chain_index).await?;
         let row = toasty::create!(RpcEndpoint {
             chain_index: body.chain_index,
             url: &body.url,
@@ -603,13 +717,13 @@ async fn delete_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .map_err(|_| AppError::InvalidArgument("invalid uuid".into()))?;
 
         let mut db = st.db.clone_inner();
-        let mut row: RpcEndpoint = RpcEndpoint::get_by_id(&mut db, &id)
+        let row: RpcEndpoint = RpcEndpoint::get_by_id(&mut db, &id)
             .await
             .map_err(|_| AppError::NotFound("endpoint not found".into()))?;
 
         let chain_index = row.chain_index;
-        row.update()
-            .enabled(false)
+        RpcEndpoint::filter(RpcEndpoint::fields().id().eq(id))
+            .delete()
             .exec(&mut db)
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
@@ -1087,6 +1201,7 @@ pub fn admin_router() -> Router {
                 .put(update_key)
                 .delete(delete_key),
         )
+        .push(Router::with_path("networks").get(list_networks))
         .push(
             Router::with_path("endpoints")
                 .get(list_endpoints)
@@ -1111,7 +1226,20 @@ pub fn admin_router() -> Router {
 
 #[cfg(test)]
 mod tests {
-    use super::{sign_token, verify_token};
+    use super::{infer_network_meta, sign_token, verify_token};
+
+    #[test]
+    fn infer_network_meta_known_chains() {
+        assert_eq!(infer_network_meta(0), ("BTC".into(), "bitcoin"));
+        assert_eq!(infer_network_meta(60), ("ETH".into(), "evm"));
+        assert_eq!(infer_network_meta(195), ("TRON".into(), "tron"));
+        assert_eq!(infer_network_meta(501), ("SOL".into(), "solana"));
+    }
+
+    #[test]
+    fn infer_network_meta_unknown_chain_defaults_to_evm() {
+        assert_eq!(infer_network_meta(424242), ("".into(), "evm"));
+    }
 
     #[test]
     fn token_roundtrip() {

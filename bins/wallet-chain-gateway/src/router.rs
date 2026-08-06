@@ -156,6 +156,7 @@ impl RpcRouter {
         user_tier: &str,
         max_block_lag: i64,
         require_ws_tunnel: bool,
+        allow_archive_fallback: bool,
     ) -> AppResult<SelectedEndpoint> {
         let all_eps = self.get_endpoints(chain_index).await?;
         if all_eps.is_empty() {
@@ -180,9 +181,6 @@ impl RpcRouter {
                     return false;
                 }
                 if !self.is_tier_allowed(&ep.tier, user_tier) {
-                    return false;
-                }
-                if need_archive && !ep.is_archive {
                     return false;
                 }
                 if let (Some(mh), Some(eh)) = (max_height, ep.block_height) {
@@ -210,7 +208,19 @@ impl RpcRouter {
             )));
         }
 
-        let mut sorted = filtered;
+        let mut candidates = filtered;
+        if need_archive && !allow_archive_fallback {
+            let archives: Vec<&CachedEndpoint> = candidates
+                .iter()
+                .copied()
+                .filter(|ep| ep.is_archive)
+                .collect();
+            if !archives.is_empty() {
+                candidates = archives;
+            }
+        }
+
+        let mut sorted = candidates;
         sorted.sort_by(|a, b| {
             b.priority
                 .cmp(&a.priority)
@@ -293,9 +303,16 @@ impl RpcRouter {
         let method = body.get("method").and_then(|v| v.as_str());
 
         let mut last_err = None;
-        for _ in 0..max_retries.max(1) {
+        for attempt in 0..max_retries.max(1) {
             let selection = match self
-                .select_endpoint(chain_index, method, user_tier, max_block_lag.max(0), false)
+                .select_endpoint(
+                    chain_index,
+                    method,
+                    user_tier,
+                    max_block_lag.max(0),
+                    false,
+                    attempt > 0,
+                )
                 .await
             {
                 Ok(s) => s,

@@ -45,6 +45,7 @@ pub async fn proxy_rpc_ws(
             &user_tier,
             cfg.max_block_lag.max(0),
             true,
+            false,
         )
         .await
     {

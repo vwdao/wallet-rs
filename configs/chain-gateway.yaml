@@ -1,4 +1,5 @@
 listen: "0.0.0.0:8545"
+grpc_listen: "0.0.0.0:50051"
 database:
   url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
 redis:
@@ -9,3 +10,4 @@ admin_username: "admin"
 admin_password: "changeme-admin-password"
 admin_key: "changeme-admin-key"
 stats_batch_interval_ms: 1000
+log_requests: true

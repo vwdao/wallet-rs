@@ -140,6 +140,8 @@ pub struct WsConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChainGatewayConfig {
     pub listen: String,
+    #[serde(default)]
+    pub grpc_listen: Option<String>,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
     #[serde(default = "default_health_check_interval_ms")]

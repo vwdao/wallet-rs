@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { CHAIN_OPTIONS, chainName } from '../lib/chains.js'
 import { headersFromText, headersToText } from '../lib/headers.js'
+import { mergeChainOptions } from '../lib/networks.js'
 import { Button } from './ui/Button.jsx'
 import { Field } from './ui/Field.jsx'
 import { Modal } from './ui/Modal.jsx'
@@ -41,6 +42,7 @@ export function EndpointModal({ open, endpoint, api, onClose, onSaved }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [chainOptions, setChainOptions] = useState(CHAIN_OPTIONS)
 
   useEffect(() => {
     if (!open) return
@@ -48,6 +50,20 @@ export function EndpointModal({ open, endpoint, api, onClose, onSaved }) {
     setError('')
     setSaving(false)
   }, [endpoint, open])
+
+  useEffect(() => {
+    let cancelled = false
+    api('/admin/networks')
+      .then((data) => {
+        if (!cancelled) setChainOptions(mergeChainOptions(data))
+      })
+      .catch(() => {
+        if (!cancelled) setChainOptions(CHAIN_OPTIONS)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
 
   function update(name, value) {
     setForm((current) => ({ ...current, [name]: value }))
@@ -118,13 +134,13 @@ export function EndpointModal({ open, endpoint, api, onClose, onSaved }) {
               onChange={(event) => update('chain_index', event.target.value)}
             >
               <option value="">请选择链</option>
-              {CHAIN_OPTIONS.map((item) => (
+              {chainOptions.map((item) => (
                 <option key={item.id} value={String(item.id)}>
                   {item.name} ({item.id})
                 </option>
               ))}
               {form.chain_index !== ''
-                && !CHAIN_OPTIONS.some((item) => item.id === Number(form.chain_index)) ? (
+                && !chainOptions.some((item) => item.id === Number(form.chain_index)) ? (
                   <option value={String(form.chain_index)}>
                     {chainName(form.chain_index)} ({form.chain_index})
                   </option>

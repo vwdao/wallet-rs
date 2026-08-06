@@ -1,8 +1,10 @@
-mod grpc;
+pub(crate) mod grpc;
 mod http;
 mod tcp;
 mod ws;
 mod ws_bridge;
+
+pub(crate) use grpc::{endpoint_for_grpc, BytesCodec};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
