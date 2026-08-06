@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   compact,
+  drawChainBarChart,
   drawIpBarChart,
   drawMethodsBarChart,
   drawStatsChart,
@@ -114,34 +115,120 @@ describe('drawStatsChart', () => {
 
 describe('drawIpBarChart', () => {
   it('returns false without ip data', () => {
-    expect(drawIpBarChart({}, { items: [] })).toBe(false)
+    expect(drawIpBarChart({}, { series: [], points: [] })).toBe(false)
   })
 
-  it('draws stacked bars per client ip', () => {
+  it('draws stacked bars across time buckets', () => {
     const { canvas, context } = mockCanvas()
     const drawn = drawIpBarChart(canvas, {
-      items: [
-        { client_ip: '1.1.1.1', total_requests: 4, success_count: 3, error_count: 1 },
-        { client_ip: '2.2.2.2', total_requests: 2, success_count: 2, error_count: 0 },
+      bucket_seconds: 60,
+      series: [
+        { protocol: 'http', total_requests: 5 },
+        { protocol: 'ws', total_requests: 2 },
+      ],
+      points: [
+        {
+          ts: 1_700_000_000,
+          values: [
+            { protocol: 'http', total_requests: 3 },
+            { protocol: 'ws', total_requests: 1 },
+          ],
+        },
+        {
+          ts: 1_700_000_060,
+          values: [
+            { protocol: 'http', total_requests: 2 },
+            { protocol: 'ws', total_requests: 1 },
+          ],
+        },
       ],
     })
     expect(drawn).toBe(true)
     expect(context.fillRect.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 
-  it('records hit regions per client ip', () => {
+  it('records hit regions per time bucket', () => {
     const { canvas } = mockCanvas()
     drawIpBarChart(canvas, {
-      items: [
-        { client_ip: '1.1.1.1', total_requests: 4, success_count: 3, error_count: 1, avg_latency_ms: 80 },
-        { client_ip: '2.2.2.2', total_requests: 2, success_count: 2, error_count: 0, avg_latency_ms: 60 },
+      bucket_seconds: 60,
+      series: [
+        { protocol: 'http', total_requests: 4 },
+        { protocol: 'grpc', total_requests: 2 },
+      ],
+      points: [
+        {
+          ts: 1_700_000_000,
+          values: [
+            { protocol: 'http', total_requests: 4 },
+            { protocol: 'grpc', total_requests: 2 },
+          ],
+        },
       ],
     })
     const hits = getChartHits(canvas)
-    expect(hits.length).toBe(2)
-    expect(hits[0].payload.client_ip).toBe('1.1.1.1')
-    expect(hits[0].payload.total_requests).toBe(4)
-    expect(hits[1].payload.client_ip).toBe('2.2.2.2')
+    expect(hits.length).toBe(1)
+    expect(hits[0].payload.ts).toBe(1_700_000_000)
+    expect(hits[0].payload.total_requests).toBe(6)
+    expect(hits[0].payload.values[0].protocol).toBe('http')
+  })
+})
+
+describe('drawChainBarChart', () => {
+  it('returns false without chain data', () => {
+    expect(drawChainBarChart({}, { series: [], points: [] })).toBe(false)
+  })
+
+  it('draws stacked bars by chain across time buckets', () => {
+    const { canvas, context } = mockCanvas()
+    const drawn = drawChainBarChart(canvas, {
+      bucket_seconds: 60,
+      series: [
+        { chain_index: 10000900, total_requests: 5 },
+        { chain_index: 10000999, total_requests: 2 },
+      ],
+      points: [
+        {
+          ts: 1_700_000_000,
+          values: [
+            { chain_index: 10000900, total_requests: 3, label: 'AVAX' },
+            { chain_index: 10000999, total_requests: 1, label: 'HYPER' },
+          ],
+        },
+        {
+          ts: 1_700_000_060,
+          values: [
+            { chain_index: 10000900, total_requests: 2, label: 'AVAX' },
+            { chain_index: 10000999, total_requests: 1, label: 'HYPER' },
+          ],
+        },
+      ],
+    })
+    expect(drawn).toBe(true)
+    expect(context.fillRect.mock.calls.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('records hit regions with chain breakdown', () => {
+    const { canvas } = mockCanvas()
+    drawChainBarChart(canvas, {
+      bucket_seconds: 60,
+      series: [
+        { chain_index: 10000900, total_requests: 17 },
+        { chain_index: 10004663, total_requests: 4133 },
+      ],
+      points: [
+        {
+          ts: 1_700_000_000,
+          values: [
+            { chain_index: 10000900, total_requests: 17, label: 'AVAX' },
+            { chain_index: 10004663, total_requests: 4133, label: 'ROBIN' },
+          ],
+        },
+      ],
+    })
+    const hits = getChartHits(canvas)
+    expect(hits.length).toBe(1)
+    expect(hits[0].payload.total_requests).toBe(4150)
+    expect(hits[0].payload.values[0].chain_index).toBe(10000900)
   })
 })
 

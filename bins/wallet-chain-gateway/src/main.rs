@@ -262,6 +262,7 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             api_key: api_key.clone(),
             chain_index,
             client_ip: client_ip.clone(),
+            protocol: Some("http".into()),
             method: method.clone(),
             status_code,
             latency_ms: latency,

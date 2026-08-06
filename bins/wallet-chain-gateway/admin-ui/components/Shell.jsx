@@ -11,14 +11,16 @@ const tabs = [
 
 export function Shell({ tab, onTab, onLogout, children }) {
   return (
-    <main className="shell">
-      <header>
-        <div>
+    <main className="shell shell-dashboard">
+      <div className="shell-backdrop" aria-hidden="true" />
+      <header className="shell-header">
+        <div className="shell-brand">
+          <span className="shell-kicker">Admin Console</span>
           <strong>Chain Gateway Admin</strong>
         </div>
         <Button variant="ghost" size="sm" onClick={onLogout}>退出登录</Button>
       </header>
-      <nav aria-label="管理后台导航">
+      <nav className="shell-nav" aria-label="管理后台导航">
         {tabs.map(([id, label]) => (
           <button
             key={id}

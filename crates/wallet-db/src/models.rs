@@ -303,6 +303,8 @@ pub struct ChainGatewayStats {
 
     pub client_ip: Option<String>,
 
+    pub protocol: Option<String>,
+
     pub method: Option<String>,
 
     pub status_code: i32,

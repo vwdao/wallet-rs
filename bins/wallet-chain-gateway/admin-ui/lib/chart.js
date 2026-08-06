@@ -188,17 +188,80 @@ function truncateLabel(label, max = 18) {
   return `${text.slice(0, max - 1)}…`
 }
 
-export function drawIpBarChart(canvas, data, visibility = {}) {
-  const showSuccess = visibility.success !== false
-  const showError = visibility.error !== false
+export function formatOriginTimeLabel(ts, bucketSeconds) {
+  const date = new Date(ts * 1000)
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  if (bucketSeconds >= 24 * 3600) {
+    return `${month}-${day}`
+  }
+  if (bucketSeconds >= 3600) {
+    return `${month}-${day} ${hours}:00`
+  }
+  return `${month}-${day} ${hours}:${minutes}`
+}
 
-  const items = Array.isArray(data?.items) ? data.items : []
-  const total = items.reduce((sum, item) => {
-    const success = showSuccess ? Number(item.success_count || 0) : 0
-    const error = showError ? Number(item.error_count || 0) : 0
-    return sum + success + error
+export const IP_SERIES_COLORS = [
+  '#3b82f6',
+  '#14b8a6',
+  '#a78bfa',
+  '#f59e0b',
+  '#f472b6',
+  '#38bdf8',
+]
+
+export const PROTOCOL_SERIES_COLORS = {
+  http: '#3b82f6',
+  https: '#3b82f6',
+  ws: '#14b8a6',
+  wss: '#14b8a6',
+  grpc: '#a78bfa',
+  grpcs: '#a78bfa',
+  tcp: '#f59e0b',
+  未知: '#94a3b8',
+}
+
+export function protocolColor(protocol, index = 0) {
+  const key = String(protocol || '').toLowerCase()
+  return PROTOCOL_SERIES_COLORS[key] || IP_SERIES_COLORS[index % IP_SERIES_COLORS.length]
+}
+
+export function seriesColor(key, index = 0) {
+  return IP_SERIES_COLORS[index % IP_SERIES_COLORS.length]
+}
+
+/**
+ * Generic stacked time-series bars.
+ * data.series: [{ key, total_requests }]
+ * data.points: [{ ts, values: [{ key, total_requests }] }]
+ * visibility: { [key]: boolean }
+ * options.colorFor(key, index) -> color
+ * options.enrichValue(value, color) -> payload value fields
+ */
+export function drawStackedTimeSeries(canvas, data, visibility = {}, options = {}) {
+  const series = Array.isArray(data?.series) ? data.series : []
+  const points = Array.isArray(data?.points) ? data.points : []
+  const bucketSeconds = Number(data?.bucket_seconds || 60)
+  const colorFor = options.colorFor || seriesColor
+  const enrichValue = options.enrichValue || ((item, color) => ({
+    key: item.key,
+    label: item.label || item.key,
+    total_requests: Number(item.total_requests || 0),
+    color,
+  }))
+  const visibleSeries = series.filter((item) => visibility[item.key] !== false)
+
+  const total = points.reduce((sum, point) => {
+    const values = Array.isArray(point.values) ? point.values : []
+    return sum + values.reduce((inner, item) => {
+      if (visibility[item.key] === false) return inner
+      return inner + Number(item.total_requests || 0)
+    }, 0)
   }, 0)
-  if (!total) {
+
+  if (!total || !visibleSeries.length) {
     hitMap.set(canvas, [])
     return false
   }
@@ -221,36 +284,50 @@ export function drawIpBarChart(canvas, data, visibility = {}) {
   context.clearRect(0, 0, width, height)
   context.font = '11px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'
 
-  const padding = { left: 46, right: 16, top: 14, bottom: 42 }
+  const padding = { left: 46, right: 16, top: 14, bottom: 36 }
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
+
   let maxRequests = 0
-  items.forEach((item) => {
-    const success = showSuccess ? Number(item.success_count || 0) : 0
-    const error = showError ? Number(item.error_count || 0) : 0
-    maxRequests = Math.max(maxRequests, success + error)
+  points.forEach((point) => {
+    const values = Array.isArray(point.values) ? point.values : []
+    const bucketTotal = values.reduce((sum, item) => {
+      if (visibility[item.key] === false) return sum
+      return sum + Number(item.total_requests || 0)
+    }, 0)
+    maxRequests = Math.max(maxRequests, bucketTotal)
   })
   maxRequests = Math.max(1, roundUp(maxRequests || 1))
 
-  const count = items.length
-  const slot = chartWidth / Math.max(count, 1)
-  const barWidth = Math.max(10, Math.min(42, slot * 0.55))
+  const count = Math.max(points.length, 1)
+  const slot = chartWidth / count
+  const barWidth = Math.max(6, Math.min(36, slot * 0.62))
   const x = (index) => padding.left + slot * index + slot / 2
   const y = (value) => padding.top + chartHeight - chartHeight * (value / maxRequests)
+  const colorByKey = new Map(
+    series.map((item, index) => [item.key, colorFor(item.key, index)]),
+  )
 
-  const hits = items.map((item, index) => ({
-    x: padding.left + slot * index,
-    y: padding.top,
-    w: slot,
-    h: chartHeight,
-    payload: {
-      client_ip: item.client_ip,
-      total_requests: Number(item.total_requests || 0),
-      success_count: Number(item.success_count || 0),
-      error_count: Number(item.error_count || 0),
-      avg_latency_ms: Number(item.avg_latency_ms || 0),
-    },
-  }))
+  const hits = points.map((point, index) => {
+    const values = (Array.isArray(point.values) ? point.values : [])
+      .filter((item) => visibility[item.key] !== false)
+      .map((item) => enrichValue(
+        item,
+        colorByKey.get(item.key) || colorFor(item.key),
+      ))
+    return {
+      x: padding.left + slot * index,
+      y: padding.top,
+      w: slot,
+      h: chartHeight,
+      payload: {
+        ts: Number(point.ts || 0),
+        bucket_seconds: bucketSeconds,
+        total_requests: values.reduce((sum, item) => sum + Number(item.total_requests || 0), 0),
+        values,
+      },
+    }
+  })
   hitMap.set(canvas, hits)
 
   context.strokeStyle = colors.grid
@@ -267,34 +344,90 @@ export function drawIpBarChart(canvas, data, visibility = {}) {
     context.fillText(compact(value), padding.left - 6, yy)
   }
 
-  items.forEach((item, index) => {
+  points.forEach((point, index) => {
     const xx = x(index)
-    const base = y(0)
-    const success = showSuccess ? Number(item.success_count || 0) : 0
-    const error = showError ? Number(item.error_count || 0) : 0
-    const middle = y(success)
-    const top = y(success + error)
-    if (showSuccess) {
-      context.fillStyle = colors.green
-      context.fillRect(xx - barWidth / 2, middle, barWidth, Math.max(0, base - middle))
-    }
-    if (showError) {
-      context.fillStyle = colors.red
-      context.fillRect(xx - barWidth / 2, top, barWidth, Math.max(0, middle - top))
-    }
+    let stacked = 0
+    const values = Array.isArray(point.values) ? point.values : []
+    visibleSeries.forEach((seriesItem) => {
+      const match = values.find((item) => item.key === seriesItem.key)
+      const amount = Number(match?.total_requests || 0)
+      if (!amount) return
+      const bottom = y(stacked)
+      stacked += amount
+      const top = y(stacked)
+      context.fillStyle = colorByKey.get(seriesItem.key) || colorFor(seriesItem.key)
+      context.fillRect(xx - barWidth / 2, top, barWidth, Math.max(0, bottom - top))
+    })
+  })
 
-    context.fillStyle = colors.muted
-    context.textAlign = 'center'
-    context.textBaseline = 'top'
-    context.fillText(truncateLabel(item.client_ip), xx, padding.top + chartHeight + 8)
-
-    context.textBaseline = 'bottom'
-    context.fillStyle = colors.muted
-    context.fillText(compact(success + error), xx, top - 4)
+  context.fillStyle = colors.muted
+  context.textAlign = 'center'
+  context.textBaseline = 'top'
+  const labelEvery = Math.max(1, Math.ceil(points.length / 8))
+  points.forEach((point, index) => {
+    if (index % labelEvery !== 0 && index !== points.length - 1) return
+    context.fillText(
+      formatOriginTimeLabel(point.ts, bucketSeconds),
+      x(index),
+      padding.top + chartHeight + 8,
+    )
   })
 
   context.textBaseline = 'alphabetic'
   return true
+}
+
+export function drawIpBarChart(canvas, data, visibility = {}) {
+  const normalized = {
+    bucket_seconds: data?.bucket_seconds,
+    series: (Array.isArray(data?.series) ? data.series : []).map((item) => ({
+      key: item.protocol,
+      total_requests: item.total_requests,
+    })),
+    points: (Array.isArray(data?.points) ? data.points : []).map((point) => ({
+      ts: point.ts,
+      values: (Array.isArray(point.values) ? point.values : []).map((item) => ({
+        key: item.protocol,
+        label: item.protocol,
+        total_requests: item.total_requests,
+      })),
+    })),
+  }
+  return drawStackedTimeSeries(canvas, normalized, visibility, {
+    colorFor: protocolColor,
+    enrichValue: (item, color) => ({
+      protocol: item.key,
+      total_requests: Number(item.total_requests || 0),
+      color,
+    }),
+  })
+}
+
+export function drawChainBarChart(canvas, data, visibility = {}) {
+  const normalized = {
+    bucket_seconds: data?.bucket_seconds,
+    series: (Array.isArray(data?.series) ? data.series : []).map((item) => ({
+      key: String(item.chain_index),
+      total_requests: item.total_requests,
+    })),
+    points: (Array.isArray(data?.points) ? data.points : []).map((point) => ({
+      ts: point.ts,
+      values: (Array.isArray(point.values) ? point.values : []).map((item) => ({
+        key: String(item.chain_index),
+        label: item.label || String(item.chain_index),
+        total_requests: item.total_requests,
+      })),
+    })),
+  }
+  return drawStackedTimeSeries(canvas, normalized, visibility, {
+    colorFor: seriesColor,
+    enrichValue: (item, color) => ({
+      chain_index: Number(item.key),
+      label: item.label || item.key,
+      total_requests: Number(item.total_requests || 0),
+      color,
+    }),
+  })
 }
 
 export function drawMethodsBarChart(canvas, data, visibility = {}) {

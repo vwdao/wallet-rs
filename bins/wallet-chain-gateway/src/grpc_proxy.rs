@@ -122,6 +122,7 @@ async fn grpc_serve(
             api_key: outcome.api_key.clone(),
             chain_index: outcome.chain_index,
             client_ip: Some(client_ip.clone()),
+            protocol: Some("grpc".into()),
             method: Some(outcome.method.clone()),
             status_code: if outcome.payload.is_some() { 200 } else { 503 },
             latency_ms: latency,

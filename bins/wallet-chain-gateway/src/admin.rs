@@ -1002,18 +1002,51 @@ async fn get_stats_series(req: &mut Request, depot: &mut Depot, res: &mut Respon
 }
 
 #[derive(Serialize)]
-struct StatsByIpItem {
+struct StatsByIpListItem {
     client_ip: String,
     total_requests: i64,
-    success_count: i64,
-    error_count: i64,
-    avg_latency_ms: f64,
+}
+
+#[derive(Serialize)]
+struct StatsByIpSeries {
+    protocol: String,
+    total_requests: i64,
+}
+
+#[derive(Serialize)]
+struct StatsByIpPointValue {
+    protocol: String,
+    total_requests: i64,
+}
+
+#[derive(Serialize)]
+struct StatsByIpPoint {
+    ts: i64,
+    values: Vec<StatsByIpPointValue>,
 }
 
 #[derive(Serialize)]
 struct StatsByIp {
     range: String,
-    items: Vec<StatsByIpItem>,
+    bucket_seconds: i64,
+    client_ip: Option<String>,
+    ips: Vec<StatsByIpListItem>,
+    series: Vec<StatsByIpSeries>,
+    points: Vec<StatsByIpPoint>,
+}
+
+fn normalize_stats_protocol(raw: Option<&str>) -> String {
+    match raw.map(str::trim).filter(|s| !s.is_empty()) {
+        Some(value) => value.to_ascii_lowercase(),
+        None => "未知".to_string(),
+    }
+}
+
+fn normalize_stats_client_ip(raw: Option<&str>) -> String {
+    raw.map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("未知")
+        .to_string()
 }
 
 fn parse_stats_range(range: &str) -> Result<(i64, i64), AppError> {
@@ -1040,10 +1073,12 @@ async fn get_stats_by_ip(req: &mut Request, depot: &mut Depot, res: &mut Respons
         let range: String = req.query("range").unwrap_or_else(|| "1h".into());
         let api_key: Option<String> = req.query("api_key");
         let chain_index: Option<i64> = req.query("chain_index");
-        let limit_raw: i64 = req.query("limit").unwrap_or(12);
-        let limit = limit_raw.clamp(1, 50) as usize;
+        let client_ip_filter: Option<String> = req
+            .query::<String>("client_ip")
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
 
-        let (duration_secs, _) = parse_stats_range(&range)?;
+        let (duration_secs, bucket_secs) = parse_stats_range(&range)?;
         let now = jiff::Timestamp::now();
         let cutoff = now
             .checked_sub(jiff::Span::new().seconds(duration_secs))
@@ -1064,46 +1099,219 @@ async fn get_stats_by_ip(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
 
-        let mut map: std::collections::HashMap<String, (i64, i64, i64)> =
+        let mut ip_totals: std::collections::HashMap<String, i64> =
             std::collections::HashMap::new();
+        let mut protocol_totals: std::collections::HashMap<String, i64> =
+            std::collections::HashMap::new();
+        let mut buckets: BTreeMap<i64, std::collections::HashMap<String, i64>> = BTreeMap::new();
+
         for row in &rows {
-            let ip = row
-                .client_ip
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .unwrap_or("未知")
-                .to_string();
-            let entry = map.entry(ip).or_insert((0, 0, 0));
-            entry.0 += 1;
-            if row.status_code >= 400 {
-                entry.1 += 1;
+            let ip = normalize_stats_client_ip(row.client_ip.as_deref());
+            *ip_totals.entry(ip.clone()).or_insert(0) += 1;
+
+            if let Some(filter) = &client_ip_filter {
+                if ip != *filter {
+                    continue;
+                }
             }
-            entry.2 += row.latency_ms as i64;
+
+            let protocol = normalize_stats_protocol(row.protocol.as_deref());
+            *protocol_totals.entry(protocol.clone()).or_insert(0) += 1;
+            let bucket = (row.created_at.as_second() / bucket_secs) * bucket_secs;
+            let entry = buckets.entry(bucket).or_default();
+            *entry.entry(protocol).or_insert(0) += 1;
         }
 
-        let mut items: Vec<StatsByIpItem> = map
+        let mut ips: Vec<StatsByIpListItem> = ip_totals
             .into_iter()
-            .map(|(client_ip, (total, errors, total_latency))| StatsByIpItem {
+            .map(|(client_ip, total_requests)| StatsByIpListItem {
                 client_ip,
-                total_requests: total,
-                success_count: total - errors,
-                error_count: errors,
-                avg_latency_ms: if total > 0 {
-                    total_latency as f64 / total as f64
-                } else {
-                    0.0
-                },
+                total_requests,
             })
             .collect();
-        items.sort_by(|a, b| {
+        ips.sort_by(|a, b| {
             b.total_requests
                 .cmp(&a.total_requests)
                 .then_with(|| a.client_ip.cmp(&b.client_ip))
         });
-        items.truncate(limit);
 
-        Ok(Json(StatsByIp { range, items }))
+        let mut series: Vec<StatsByIpSeries> = protocol_totals
+            .into_iter()
+            .map(|(protocol, total_requests)| StatsByIpSeries {
+                protocol,
+                total_requests,
+            })
+            .collect();
+        series.sort_by(|a, b| {
+            protocol_rank(&a.protocol)
+                .cmp(&protocol_rank(&b.protocol))
+                .then_with(|| b.total_requests.cmp(&a.total_requests))
+                .then_with(|| a.protocol.cmp(&b.protocol))
+        });
+        let protocols: Vec<String> = series.iter().map(|item| item.protocol.clone()).collect();
+
+        let first_bucket = (cutoff.as_second() / bucket_secs) * bucket_secs;
+        let last_bucket = (now.as_second() / bucket_secs) * bucket_secs;
+        let mut points = Vec::new();
+        let mut bucket = first_bucket;
+        while bucket <= last_bucket {
+            let counts = buckets.get(&bucket);
+            let values = protocols
+                .iter()
+                .map(|protocol| StatsByIpPointValue {
+                    protocol: protocol.clone(),
+                    total_requests: counts
+                        .and_then(|map| map.get(protocol).copied())
+                        .unwrap_or(0),
+                })
+                .collect();
+            points.push(StatsByIpPoint {
+                ts: bucket,
+                values,
+            });
+            bucket += bucket_secs;
+        }
+
+        Ok(Json(StatsByIp {
+            range,
+            bucket_seconds: bucket_secs,
+            client_ip: client_ip_filter,
+            ips,
+            series,
+            points,
+        }))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
+    }
+}
+
+fn protocol_rank(protocol: &str) -> u8 {
+    match protocol {
+        "http" | "https" => 0,
+        "ws" | "wss" => 1,
+        "grpc" | "grpcs" => 2,
+        "tcp" => 3,
+        _ => 9,
+    }
+}
+
+#[derive(Serialize)]
+struct StatsByChainSeries {
+    chain_index: i64,
+    total_requests: i64,
+}
+
+#[derive(Serialize)]
+struct StatsByChainPointValue {
+    chain_index: i64,
+    total_requests: i64,
+}
+
+#[derive(Serialize)]
+struct StatsByChainPoint {
+    ts: i64,
+    values: Vec<StatsByChainPointValue>,
+}
+
+#[derive(Serialize)]
+struct StatsByChain {
+    range: String,
+    bucket_seconds: i64,
+    series: Vec<StatsByChainSeries>,
+    points: Vec<StatsByChainPoint>,
+}
+
+#[handler]
+async fn get_stats_by_chain(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<StatsByChain>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, st)?;
+
+        let range: String = req.query("range").unwrap_or_else(|| "1h".into());
+        let api_key: Option<String> = req.query("api_key");
+        let chain_index: Option<i64> = req.query("chain_index");
+        let limit_raw: i64 = req.query("limit").unwrap_or(12);
+        let limit = limit_raw.clamp(1, 30) as usize;
+
+        let (duration_secs, bucket_secs) = parse_stats_range(&range)?;
+        let now = jiff::Timestamp::now();
+        let cutoff = now
+            .checked_sub(jiff::Span::new().seconds(duration_secs))
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut q = ChainGatewayStats::all()
+            .filter(ChainGatewayStats::fields().created_at().ge(cutoff));
+        if let Some(key) = &api_key {
+            q = q.filter(ChainGatewayStats::fields().api_key().eq(key));
+        }
+        if let Some(ci) = chain_index {
+            q = q.filter(ChainGatewayStats::fields().chain_index().eq(ci));
+        }
+
+        let mut db = st.db.clone_inner();
+        let rows: Vec<ChainGatewayStats> = q
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let mut totals: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
+        let mut buckets: BTreeMap<i64, std::collections::HashMap<i64, i64>> = BTreeMap::new();
+
+        for row in &rows {
+            *totals.entry(row.chain_index).or_insert(0) += 1;
+            let bucket = (row.created_at.as_second() / bucket_secs) * bucket_secs;
+            let entry = buckets.entry(bucket).or_default();
+            *entry.entry(row.chain_index).or_insert(0) += 1;
+        }
+
+        let mut series: Vec<StatsByChainSeries> = totals
+            .into_iter()
+            .map(|(chain_index, total_requests)| StatsByChainSeries {
+                chain_index,
+                total_requests,
+            })
+            .collect();
+        series.sort_by(|a, b| {
+            b.total_requests
+                .cmp(&a.total_requests)
+                .then_with(|| a.chain_index.cmp(&b.chain_index))
+        });
+        series.truncate(limit);
+        let top_chains: Vec<i64> = series.iter().map(|item| item.chain_index).collect();
+
+        let first_bucket = (cutoff.as_second() / bucket_secs) * bucket_secs;
+        let last_bucket = (now.as_second() / bucket_secs) * bucket_secs;
+        let mut points = Vec::new();
+        let mut bucket = first_bucket;
+        while bucket <= last_bucket {
+            let counts = buckets.get(&bucket);
+            let values = top_chains
+                .iter()
+                .map(|chain_index| StatsByChainPointValue {
+                    chain_index: *chain_index,
+                    total_requests: counts
+                        .and_then(|map| map.get(chain_index).copied())
+                        .unwrap_or(0),
+                })
+                .collect();
+            points.push(StatsByChainPoint {
+                ts: bucket,
+                values,
+            });
+            bucket += bucket_secs;
+        }
+
+        Ok(Json(StatsByChain {
+            range,
+            bucket_seconds: bucket_secs,
+            series,
+            points,
+        }))
     }
     .await;
     match result {
@@ -1366,6 +1574,7 @@ pub fn admin_router() -> Router {
         )
         .push(Router::with_path("stats/series").get(get_stats_series))
         .push(Router::with_path("stats/by-ip").get(get_stats_by_ip))
+        .push(Router::with_path("stats/by-chain").get(get_stats_by_chain))
         .push(Router::with_path("stats/methods").get(get_stats_methods))
         .push(Router::with_path("stats").get(get_stats))
         .push(

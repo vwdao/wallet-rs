@@ -2,38 +2,47 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  drawIpBarChart,
+  drawChainBarChart,
   formatOriginTimeLabel,
   getChartHits,
-  protocolColor,
+  seriesColor,
 } from '../lib/chart.js'
+import { chainName } from '../lib/chains.js'
 import { ChartTooltip } from './ui/ChartTooltip.jsx'
 
-export function IpStatsChart({
-  data,
-  loading = false,
-  selectedIp = '',
-  onSelectIp,
-}) {
+export function ChainStatsChart({ data, loading = false }) {
   const canvasRef = useRef(null)
   const [empty, setEmpty] = useState(true)
   const [visibility, setVisibility] = useState({})
   const [tooltip, setTooltip] = useState(null)
 
-  const series = useMemo(
-    () => (Array.isArray(data?.series) ? data.series : []),
-    [data],
-  )
-  const ips = useMemo(
-    () => (Array.isArray(data?.ips) ? data.ips : []),
-    [data],
-  )
+  const chartData = useMemo(() => {
+    const series = (Array.isArray(data?.series) ? data.series : []).map((item) => ({
+      ...item,
+      label: chainName(item.chain_index),
+    }))
+    const points = (Array.isArray(data?.points) ? data.points : []).map((point) => ({
+      ...point,
+      values: (Array.isArray(point.values) ? point.values : []).map((item) => ({
+        ...item,
+        label: chainName(item.chain_index),
+      })),
+    }))
+    return {
+      ...(data || {}),
+      series,
+      points,
+    }
+  }, [data])
+
+  const series = chartData.series
 
   useEffect(() => {
     setVisibility((current) => {
       const next = {}
       for (const item of series) {
-        next[item.protocol] = current[item.protocol] !== false
+        const key = String(item.chain_index)
+        next[key] = current[key] !== false
       }
       return next
     })
@@ -41,8 +50,8 @@ export function IpStatsChart({
 
   const draw = useCallback(() => {
     if (!canvasRef.current) return
-    setEmpty(!drawIpBarChart(canvasRef.current, data, visibility))
-  }, [data, visibility])
+    setEmpty(!drawChainBarChart(canvasRef.current, chartData, visibility))
+  }, [chartData, visibility])
 
   useEffect(() => {
     draw()
@@ -58,13 +67,9 @@ export function IpStatsChart({
     return () => observer.disconnect()
   }, [draw])
 
-  function toggle(protocol) {
-    setVisibility((current) => ({ ...current, [protocol]: !current[protocol] }))
-  }
-
-  function handleSelectIp(ip) {
-    if (typeof onSelectIp !== 'function') return
-    onSelectIp(selectedIp === ip ? '' : ip)
+  function toggle(chainIndex) {
+    const key = String(chainIndex)
+    setVisibility((current) => ({ ...current, [key]: !current[key] }))
   }
 
   function handleMouseMove(event) {
@@ -82,22 +87,17 @@ export function IpStatsChart({
       return
     }
     const point = hit.payload
-    const rows = []
-    if (selectedIp) {
-      rows.push({ label: 'Source IP', value: selectedIp })
-    }
-    for (const item of (Array.isArray(point.values) ? point.values : [])) {
-      if (!item.total_requests) continue
-      rows.push({
-        label: String(item.protocol || '未知').toUpperCase(),
+    const rows = (Array.isArray(point.values) ? point.values : [])
+      .filter((item) => item.total_requests > 0)
+      .map((item) => ({
+        label: item.label || chainName(item.chain_index),
         value: item.total_requests,
         color: item.color,
-      })
-    }
-    if (rows.length > (selectedIp ? 2 : 1)) {
+      }))
+    if (rows.length > 1) {
       rows.push({ divider: true })
       rows.push({
-        label: '合计',
+        label: 'total',
         value: point.total_requests,
       })
     }
@@ -113,68 +113,40 @@ export function IpStatsChart({
     setTooltip(null)
   }
 
-  const scopeLabel = selectedIp || '全部 IP'
-
   return (
     <div
       className="chart-wrap"
       aria-busy={loading}
       style={{ opacity: loading ? 0.55 : 1, transition: 'opacity 0.15s' }}
     >
-      <div className="chart-title">请求来源 · Requests Origin</div>
-      <div className="ip-filter-bar" role="group" aria-label="来源 IP 筛选">
-        <button
-          type="button"
-          className={`ip-chip${!selectedIp ? ' active' : ''}`}
-          aria-pressed={!selectedIp}
-          onClick={() => onSelectIp?.('')}
-        >
-          全部 IP
-        </button>
-        {ips.map((item) => {
-          const active = selectedIp === item.client_ip
-          return (
-            <button
-              key={item.client_ip}
-              type="button"
-              className={`ip-chip${active ? ' active' : ''}`}
-              aria-pressed={active}
-              title={`${item.client_ip} · ${item.total_requests} 请求`}
-              onClick={() => handleSelectIp(item.client_ip)}
-            >
-              <span>{item.client_ip}</span>
-              <em>{item.total_requests}</em>
-            </button>
-          )
-        })}
-      </div>
-      <div className="ip-filter-meta">当前查看：{scopeLabel}</div>
+      <div className="chart-title">链请求量 · Requests</div>
       <canvas
         ref={canvasRef}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
-        aria-label="按时间桶展示来源请求协议分布"
+        aria-label="按时间桶展示各链请求量"
         style={{ display: empty || loading ? 'none' : 'block', width: '100%', height: 280 }}
       />
       {loading ? (
-        <div className="chart-empty">正在加载 IP 统计…</div>
+        <div className="chart-empty">正在加载链统计…</div>
       ) : empty ? (
-        <div className="chart-empty">所选范围内暂无来源请求数据</div>
+        <div className="chart-empty">所选时间范围内暂无链请求数据</div>
       ) : null}
-      <div className="chart-legend" role="group" aria-label="请求协议图例显隐">
+      <div className="chart-legend" role="group" aria-label="链路图例显隐">
         {series.map((item, index) => {
-          const active = visibility[item.protocol] !== false
-          const color = protocolColor(item.protocol, index)
+          const key = String(item.chain_index)
+          const active = visibility[key] !== false
+          const color = seriesColor(key, index)
           return (
             <button
-              key={item.protocol}
+              key={key}
               type="button"
               className={`chart-legend-btn${active ? '' : ' off'}`}
               aria-pressed={active}
-              onClick={() => toggle(item.protocol)}
+              onClick={() => toggle(item.chain_index)}
             >
               <i style={{ background: color }} />
-              {String(item.protocol || '未知').toUpperCase()}
+              {item.label || chainName(item.chain_index)}
             </button>
           )
         })}
