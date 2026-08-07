@@ -16,6 +16,8 @@ pub struct SyncRuntime {
     pub events: Arc<dyn EventBus>,
     pub poll_interval_ms: u64,
     pub confirmations: u64,
+    /// First block to backfill from when no cursor exists yet.
+    pub start_height: Option<u64>,
 }
 
 pub async fn run(rt: SyncRuntime) -> AppResult<()> {
@@ -32,9 +34,27 @@ async fn tick(rt: &SyncRuntime) -> AppResult<()> {
     let tip = rt.chain.tip().await?;
     let safe = tip.saturating_sub(rt.confirmations);
     let mut cursor = SyncCursorRepo::new(&rt.db).get(rt.chain_index).await?;
+
     if cursor == 0 {
-        cursor = safe.saturating_sub(1);
+        cursor = match rt.start_height {
+            Some(start) => start.saturating_sub(1),
+            None => safe.saturating_sub(1),
+        };
+        tracing::info!(chain = %rt.chain_index, height = cursor + 1, "initializing sync cursor");
     }
+
+    if cursor > safe {
+        tracing::warn!(
+            chain = %rt.chain_index,
+            cursor,
+            safe,
+            "chain reorged, rewinding cursor"
+        );
+        cursor = safe;
+        SyncCursorRepo::new(&rt.db).set(rt.chain_index, safe).await?;
+    }
+
+    let mut synced = 0u64;
     while cursor < safe {
         let next = cursor + 1;
         let raw_txs = rt.chain.fetch_block_txs(next).await?;
@@ -49,7 +69,11 @@ async fn tick(rt: &SyncRuntime) -> AppResult<()> {
             .set(rt.chain_index, next)
             .await?;
         cursor = next;
-        tracing::info!(height = next, txs = normalized.len(), "synced block");
+        synced += 1;
+        tracing::info!(chain = %rt.chain_index, height = next, txs = normalized.len(), "synced block");
+    }
+    if synced > 0 {
+        tracing::info!(chain = %rt.chain_index, tip, safe, synced, "sync catch-up complete");
     }
     Ok(())
 }

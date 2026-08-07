@@ -106,3 +106,88 @@ fn normalize_tron_tx(_height: u64, _idx: usize, tx: &mut NormalizedTx) {
             .map(Address::new);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use wallet_types::TxHash;
+
+    fn tx(hash: &str, raw: serde_json::Value) -> NormalizedTx {
+        NormalizedTx {
+            hash: TxHash::new(hash),
+            from: None,
+            to: None,
+            value: Amount::zero(18),
+            block_number: 0,
+            status: TxStatus::Pending,
+            raw,
+        }
+    }
+
+    #[test]
+    fn test_parse_block_sets_height() {
+        let txs = parse_block(ChainIndex::ETH, 42, vec![tx("0xabc", json!({}))]);
+        assert_eq!(txs[0].block_number, 42);
+        assert_eq!(txs[0].status, TxStatus::Pending);
+    }
+
+    #[test]
+    fn test_evm_extracts_from_to_value() {
+        let raw = json!({
+            "hash": "0xabc",
+            "from": "0x111",
+            "to": "0x222",
+            "value": "0x64",
+            "input": "0x"
+        });
+        let txs = parse_block(ChainIndex::ETH, 10, vec![tx("0xabc", raw)]);
+        let out = &txs[0];
+        assert_eq!(out.from.as_ref().unwrap().as_str(), "0x111");
+        assert_eq!(out.to.as_ref().unwrap().as_str(), "0x222");
+        assert_eq!(out.value.raw, Decimal::from(100));
+        assert_eq!(out.value.decimals, 18);
+    }
+
+    #[test]
+    fn test_evm_contract_creation_keeps_to_none() {
+        let raw = json!({
+            "hash": "0xabc",
+            "from": "0x111",
+            "to": null,
+            "input": "0x6001"
+        });
+        let txs = parse_block(ChainIndex::ETH, 10, vec![tx("0xabc", raw)]);
+        assert!(txs[0].to.is_none());
+    }
+
+    #[test]
+    fn test_tron_status_from_ret() {
+        let ok = json!({ "ret": [{ "contractRet": "SUCCESS" }] });
+        let ok_txs = parse_block(ChainIndex::TRON, 5, vec![tx("0x1", ok)]);
+        assert_eq!(ok_txs[0].status, TxStatus::Success);
+
+        let fail = json!({ "ret": [{ "contractRet": "FAILED" }] });
+        let fail_txs = parse_block(ChainIndex::TRON, 5, vec![tx("0x2", fail)]);
+        assert_eq!(fail_txs[0].status, TxStatus::Failed);
+    }
+
+    #[test]
+    fn test_tron_extracts_from() {
+        let raw = json!({
+            "raw_data": {
+                "contract": [{
+                    "parameter": { "value": { "owner_address": "T-owner" } }
+                }]
+            }
+        });
+        let txs = parse_block(ChainIndex::TRON, 5, vec![tx("0x1", raw)]);
+        assert_eq!(txs[0].from.as_ref().unwrap().as_str(), "T-owner");
+    }
+
+    #[test]
+    fn test_utxo_status_sets_success() {
+        let txs = parse_block(ChainIndex::BTC, 100, vec![tx("btc1", json!({}))]);
+        assert_eq!(txs[0].status, TxStatus::Success);
+    }
+}

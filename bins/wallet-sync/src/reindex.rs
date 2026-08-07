@@ -17,10 +17,11 @@ pub async fn start(
     chain: Arc<ChainHandle>,
     bus: Arc<dyn EventBus>,
 ) -> AppResult<()> {
+    let durable = format!("wallet-sync-reindex-{}", chain_index.as_i64());
     let mut sub = bus
-        .subscribe("wallet.sync.reindex", "wallet-sync-reindex")
+        .subscribe("wallet.sync.reindex", &durable)
         .await?;
-    info!("reindex consumer started");
+    info!(durable, "reindex consumer started");
     loop {
         match sub.next().await {
             Ok(Some(env)) => {

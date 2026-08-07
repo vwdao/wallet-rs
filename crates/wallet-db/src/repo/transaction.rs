@@ -71,12 +71,7 @@ impl<'a> TransactionRepo<'a> {
         tx: &NormalizedTx,
     ) -> AppResult<()> {
         let mut db = self.db.clone_inner();
-        let status = match tx.status {
-            wallet_types::TxStatus::Pending => "pending",
-            wallet_types::TxStatus::Success => "success",
-            wallet_types::TxStatus::Failed => "failed",
-            wallet_types::TxStatus::Dropped => "dropped",
-        };
+        let status = tx.status.as_str();
 
         let existing: Vec<Tx> = Tx::filter(
             Tx::fields()
@@ -97,10 +92,24 @@ impl<'a> TransactionRepo<'a> {
                 value: tx.value.raw,
                 block_number: tx.block_number as i64,
                 status: status,
+                raw: tx.raw.clone(),
             })
             .exec(&mut db)
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
+        } else {
+            let mut existing = existing.into_iter().next().unwrap();
+            existing
+                .update()
+                .from_address(tx.from.as_ref().map(|a| a.as_str().to_string()))
+                .to_address(tx.to.as_ref().map(|a| a.as_str().to_string()))
+                .value(tx.value.raw)
+                .block_number(tx.block_number as i64)
+                .status(status)
+                .raw(tx.raw.clone())
+                .exec(&mut db)
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))?;
         }
         Ok(())
     }

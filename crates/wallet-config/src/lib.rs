@@ -116,6 +116,10 @@ pub struct SyncConfig {
     pub chain: ChainRuntimeConfig,
     #[serde(default = "default_poll_ms")]
     pub poll_interval_ms: u64,
+    /// First block height to backfill from when no cursor exists yet.
+    /// When absent, sync starts at the current safe tip.
+    #[serde(default)]
+    pub start_height: Option<u64>,
 }
 
 fn default_poll_ms() -> u64 {

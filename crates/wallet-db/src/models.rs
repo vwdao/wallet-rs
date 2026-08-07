@@ -123,6 +123,7 @@ pub struct Token {
 }
 
 #[derive(Debug, Clone, toasty::Model)]
+#[table = "transactions"]
 pub struct Tx {
     #[key]
     #[auto]
@@ -143,6 +144,10 @@ pub struct Tx {
     pub block_number: i64,
 
     pub status: String,
+
+    #[column(type = jsonb)]
+    #[default(serde_json::json!({}))]
+    pub raw: serde_json::Value,
 
     #[default(jiff::Timestamp::now())]
     pub created_at: jiff::Timestamp,

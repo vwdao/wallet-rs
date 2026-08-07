@@ -137,6 +137,17 @@ pub enum TxStatus {
     Dropped,
 }
 
+impl TxStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Success => "success",
+            Self::Failed => "failed",
+            Self::Dropped => "dropped",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NormalizedTx {
     pub hash: TxHash,

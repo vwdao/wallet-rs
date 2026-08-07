@@ -30,7 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = build_registry(std::slice::from_ref(&cfg.chain))?;
     let events = match NatsEventBus::connect(&cfg.nats.url).await {
         Ok(b) => b as Arc<dyn wallet_events::EventBus>,
-        Err(_) => MemoryEventBus::new(256),
+        Err(e) => {
+            tracing::warn!(error = %e, "NATS unavailable, falling back to in-memory event bus");
+            MemoryEventBus::new(256)
+        }
     };
     let chain_index = ChainIndex(cfg.chain_index);
     let handle = registry.get(chain_index)?.clone();
@@ -46,6 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             events,
             poll_interval_ms: cfg.poll_interval_ms,
             confirmations: cfg.chain.confirmations,
+            start_height: cfg.start_height,
         }) => { r?; }
         r = reindex::start(db_for_reindex, chain_index, Arc::new(handle_for_reindex), events_for_reindex) => { r?; }
         _ = tokio::signal::ctrl_c() => {
