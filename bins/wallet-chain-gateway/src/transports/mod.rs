@@ -17,6 +17,14 @@ use crate::protocol::{parse_endpoint_url_with, EndpointProtocol};
 
 pub type EndpointHeaders = BTreeMap<String, String>;
 
+/// Returns `Some` when the response carries a real RPC error.
+///
+/// Bitcoin Core (and a few other families) always include an `"error"` field,
+/// set to `null` on success. A present-but-null error is therefore NOT a failure.
+pub(crate) fn rpc_error(response: &Value) -> Option<Value> {
+    response.get("error").filter(|e| !e.is_null()).cloned()
+}
+
 pub async fn execute_unary(
     http: &reqwest::Client,
     url: &str,
@@ -96,10 +104,10 @@ pub async fn probe(
 }
 
 fn parse_probe_result(v: &Value, family: &str) -> wallet_error::AppResult<Option<i64>> {
-    if v.get("error").is_some() {
-        return Err(wallet_error::AppError::Unavailable(
-            "rpc probe returned error".into(),
-        ));
+    if let Some(err) = rpc_error(v) {
+        return Err(wallet_error::AppError::Unavailable(format!(
+            "rpc probe returned error: {err}"
+        )));
     }
     let result = v.get("result").cloned().unwrap_or(Value::Null);
     Ok(parse_block_height(&result, family))

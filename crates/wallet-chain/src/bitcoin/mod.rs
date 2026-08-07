@@ -41,7 +41,7 @@ impl BitcoinChain {
             self.pool.mark_failure(&url);
             AppError::Unavailable(e.to_string())
         })?;
-        if let Some(err) = v.get("error") {
+        if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
             self.pool.mark_failure(&url);
             return Err(AppError::Unavailable(err.to_string()));
         }

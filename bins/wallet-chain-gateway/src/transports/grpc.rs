@@ -10,7 +10,7 @@ use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 use tonic::{Request, Status};
 use wallet_error::{AppError, AppResult};
 
-use super::{ws_bridge, EndpointHeaders};
+use super::{rpc_error, ws_bridge, EndpointHeaders};
 
 #[derive(Clone, Default)]
 pub(crate) struct BytesCodec;
@@ -180,8 +180,8 @@ pub async fn execute(
 fn decode_grpc_json_response(bytes: &[u8]) -> AppResult<Value> {
     let v: Value = serde_json::from_slice(bytes)
         .map_err(|e| AppError::Unavailable(format!("invalid grpc json: {e}")))?;
-    if v.get("error").is_some() {
-        return Err(AppError::Unavailable(format!("rpc error: {}", v["error"])));
+    if let Some(err) = rpc_error(&v) {
+        return Err(AppError::Unavailable(format!("rpc error: {err}")));
     }
     Ok(v)
 }

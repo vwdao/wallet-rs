@@ -264,6 +264,12 @@ pub struct ChainGatewayKey {
     #[default(String::from("all"))]
     pub allowed_tier: String,
 
+    #[default(Vec::<String>::new())]
+    pub ip_whitelist: Vec<String>,
+
+    #[default(Vec::<String>::new())]
+    pub ip_blacklist: Vec<String>,
+
     #[default(0i64)]
     pub total_requests: i64,
 

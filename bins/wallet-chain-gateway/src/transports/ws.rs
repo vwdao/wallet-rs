@@ -10,7 +10,7 @@ use tokio_tungstenite::connect_async;
 use wallet_error::{AppError, AppResult};
 
 use super::ws_bridge;
-use super::EndpointHeaders;
+use super::{rpc_error, EndpointHeaders};
 
 fn ws_request(
     url: &str,
@@ -66,8 +66,8 @@ pub async fn execute(
 
     let v: Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Unavailable(format!("invalid json response: {e}")))?;
-    if v.get("error").is_some() {
-        return Err(AppError::Unavailable(format!("rpc error: {}", v["error"])));
+    if let Some(err) = rpc_error(&v) {
+        return Err(AppError::Unavailable(format!("rpc error: {err}")));
     }
     Ok(v)
 }

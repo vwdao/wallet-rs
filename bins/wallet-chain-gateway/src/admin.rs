@@ -150,6 +150,8 @@ struct KeyResponse {
     enabled: bool,
     allowed_chains: Vec<i64>,
     allowed_tier: String,
+    ip_whitelist: Vec<String>,
+    ip_blacklist: Vec<String>,
     total_requests: i64,
 }
 
@@ -163,6 +165,8 @@ impl KeyResponse {
             enabled: r.enabled,
             allowed_chains: r.allowed_chains.clone(),
             allowed_tier: r.allowed_tier.clone(),
+            ip_whitelist: r.ip_whitelist.clone(),
+            ip_blacklist: r.ip_blacklist.clone(),
             total_requests: r.total_requests,
         }
     }
@@ -179,6 +183,10 @@ struct CreateKeyRequest {
     allowed_chains: Vec<i64>,
     #[serde(default = "default_tier_all")]
     allowed_tier: String,
+    #[serde(default)]
+    ip_whitelist: Vec<String>,
+    #[serde(default)]
+    ip_blacklist: Vec<String>,
 }
 
 fn default_rate_limit() -> i32 {
@@ -198,6 +206,8 @@ struct UpdateKeyRequest {
     enabled: Option<bool>,
     allowed_chains: Option<Vec<i64>>,
     allowed_tier: Option<String>,
+    ip_whitelist: Option<Vec<String>>,
+    ip_blacklist: Option<Vec<String>>,
 }
 
 #[handler]
@@ -236,6 +246,9 @@ async fn create_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
+        proxy::validate_ip_list(&body.ip_whitelist)?;
+        proxy::validate_ip_list(&body.ip_blacklist)?;
+
         let key = format!("gw_{}", Uuid::new_v4().to_string().replace('-', ""));
         let mut db = st.db.clone_inner();
         let row = toasty::create!(ChainGatewayKey {
@@ -245,6 +258,8 @@ async fn create_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             enabled: body.enabled,
             allowed_chains: body.allowed_chains,
             allowed_tier: &body.allowed_tier,
+            ip_whitelist: body.ip_whitelist,
+            ip_blacklist: body.ip_blacklist,
         })
         .exec(&mut db)
         .await
@@ -278,6 +293,13 @@ async fn update_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
+        if let Some(list) = &body.ip_whitelist {
+            proxy::validate_ip_list(list)?;
+        }
+        if let Some(list) = &body.ip_blacklist {
+            proxy::validate_ip_list(list)?;
+        }
+
         let mut db = st.db.clone_inner();
         let mut row: ChainGatewayKey = ChainGatewayKey::get_by_id(&mut db, &id)
             .await
@@ -298,6 +320,12 @@ async fn update_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         }
         if let Some(tier) = &body.allowed_tier {
             upd = upd.allowed_tier(tier);
+        }
+        if let Some(list) = &body.ip_whitelist {
+            upd = upd.ip_whitelist(list.clone());
+        }
+        if let Some(list) = &body.ip_blacklist {
+            upd = upd.ip_blacklist(list.clone());
         }
         upd.exec(&mut db)
             .await

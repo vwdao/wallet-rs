@@ -11,7 +11,7 @@ use tonic::Request;
 use wallet_db::{ChainGatewayKey, Db};
 use wallet_error::{AppError, AppResult};
 
-use crate::proxy::{check_rate, resolve_chain_index};
+use crate::proxy::{check_ip_policy, check_rate, resolve_chain_index};
 use crate::stats::StatsEvent;
 use crate::transports::grpc::{grpc_to_http_url, metadata_key};
 use crate::transports::{endpoint_for_grpc, BytesCodec, EndpointHeaders};
@@ -114,7 +114,7 @@ async fn grpc_serve(
 
     let client_ip = peer.ip().to_string();
     let started = Instant::now();
-    let outcome = proxy_call(req, &state).await;
+    let outcome = proxy_call(req, &state, client_ip.clone()).await;
     let latency = started.elapsed().as_millis() as i32;
 
     if !outcome.api_key.is_empty() {
@@ -150,7 +150,7 @@ async fn grpc_serve(
     Ok(grpc_response(outcome.code, &outcome.message, outcome.payload))
 }
 
-async fn proxy_call(req: http::Request<Incoming>, state: &Gw) -> ProxyOutcome {
+async fn proxy_call(req: http::Request<Incoming>, state: &Gw, client_ip: String) -> ProxyOutcome {
     let method = req.uri().path().to_string();
 
     if !state.settings.is_ready() {
@@ -197,6 +197,9 @@ async fn proxy_call(req: http::Request<Incoming>, state: &Gw) -> ProxyOutcome {
     };
     if !key_row.enabled {
         return ProxyOutcome::err(16, "api key disabled", &method);
+    }
+    if let Err(e) = check_ip_policy(&key_row, Some(&client_ip)) {
+        return ProxyOutcome::err(grpc_code(&e), e.to_string(), &method);
     }
     if let Err(e) = check_rate(&state.rate, &api_key, key_row.rate_limit_per_min.max(0) as usize)
     {

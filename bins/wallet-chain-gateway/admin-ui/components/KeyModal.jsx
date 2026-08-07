@@ -11,6 +11,8 @@ const EMPTY_FORM = {
   rate_limit_per_min: 60,
   allowed_tier: 'all',
   chainsStr: '',
+  ipWhitelistStr: '',
+  ipBlacklistStr: '',
   enabled: true,
 }
 
@@ -23,12 +25,16 @@ function keyToForm(key) {
     rate_limit_per_min: key.rate_limit_per_min ?? 60,
     allowed_tier: key.allowed_tier || 'all',
     chainsStr: Array.isArray(key.allowed_chains) ? key.allowed_chains.join(', ') : '',
+    ipWhitelistStr: Array.isArray(key.ip_whitelist) ? key.ip_whitelist.join(', ') : '',
+    ipBlacklistStr: Array.isArray(key.ip_blacklist) ? key.ip_blacklist.join(', ') : '',
     enabled: key.enabled ?? true,
   }
 }
 
 export function keyToPayload(form) {
   const chainsStr = form.chainsStr ?? form.allowed_chains ?? ''
+  const whitelistStr = form.ipWhitelistStr ?? form.ip_whitelist ?? ''
+  const blacklistStr = form.ipBlacklistStr ?? form.ip_blacklist ?? ''
 
   return {
     name: form.name.trim(),
@@ -37,8 +43,17 @@ export function keyToPayload(form) {
     allowed_chains: chainsStr
       ? chainsStr.split(',').map((value) => parseInt(value.trim(), 10)).filter(Boolean)
       : [],
+    ip_whitelist: splitCsv(whitelistStr),
+    ip_blacklist: splitCsv(blacklistStr),
     enabled: form.enabled === true || form.enabled === 'true',
   }
+}
+
+function splitCsv(value) {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
 }
 
 export function KeyModal({ open, apiKey, api, onClose, onSaved }) {
@@ -128,6 +143,26 @@ export function KeyModal({ open, apiKey, api, onClose, onSaved }) {
                 placeholder="60, 195, 501"
                 value={form.chainsStr}
                 onChange={(event) => update('chainsStr', event.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="field-full">
+            <Field label="IP 白名单" hint="IP 或 CIDR 以逗号分隔；留空表示不限制来源 IP">
+              <input
+                type="text"
+                placeholder="203.0.113.0/24, 2001:db8::1"
+                value={form.ipWhitelistStr}
+                onChange={(event) => update('ipWhitelistStr', event.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="field-full">
+            <Field label="IP 黑名单" hint="IP 或 CIDR 以逗号分隔；命中即拒绝">
+              <input
+                type="text"
+                placeholder="198.51.100.7"
+                value={form.ipBlacklistStr}
+                onChange={(event) => update('ipBlacklistStr', event.target.value)}
               />
             </Field>
           </div>

@@ -1,5 +1,7 @@
 use dashmap::DashMap;
+use ipnet::IpNet;
 use salvo::prelude::*;
+use std::net::IpAddr;
 use std::time::Instant;
 use wallet_db::{ChainGatewayKey, Db, Network};
 use wallet_error::AppError;
@@ -31,6 +33,9 @@ pub async fn authenticate(req: &Request, st: &Gw) -> Result<ProxyAuth, AppError>
     if !key_row.enabled {
         return Err(AppError::Forbidden);
     }
+
+    let client_ip = req.remote_addr().ip().map(|ip| ip.to_string());
+    check_ip_policy(&key_row, client_ip.as_deref())?;
 
     check_rate(
         &st.rate,
@@ -115,4 +120,158 @@ pub fn validate_endpoint_url(url: &str) -> Result<(), AppError> {
         return Err(AppError::InvalidArgument("url missing host".into()));
     }
     Ok(())
+}
+
+/// Validate that every entry is a plain IP address or a CIDR block.
+pub fn validate_ip_list(entries: &[String]) -> Result<(), AppError> {
+    for entry in entries {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            return Err(AppError::InvalidArgument(
+                "IP list contains an empty entry".into(),
+            ));
+        }
+        if parse_ip_entry(trimmed).is_none() {
+            return Err(AppError::InvalidArgument(format!(
+                "invalid IP or CIDR entry: '{trimmed}'"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Check a client IP against a key's whitelist/blacklist.
+///
+/// Semantics:
+/// - whitelist non-empty  -> the IP MUST match one of the entries.
+/// - blacklist            -> the IP MUST NOT match any of the entries.
+/// - entries are either plain IPs (v4/v6) or CIDR blocks.
+/// - when the client IP cannot be determined, a non-empty whitelist fails closed.
+pub fn check_ip_policy(
+    key_row: &ChainGatewayKey,
+    client_ip: Option<&str>,
+) -> Result<(), AppError> {
+    if key_row.ip_whitelist.is_empty() && key_row.ip_blacklist.is_empty() {
+        return Ok(());
+    }
+
+    let ip: IpAddr = match client_ip {
+        Some(raw) => raw
+            .parse()
+            .map_err(|_| AppError::Forbidden)?,
+        None => return Err(AppError::Forbidden),
+    };
+
+    if !key_row.ip_whitelist.is_empty()
+        && !key_row
+            .ip_whitelist
+            .iter()
+            .any(|entry| ip_matches(entry, &ip))
+    {
+        return Err(AppError::Forbidden);
+    }
+
+    if key_row
+        .ip_blacklist
+        .iter()
+        .any(|entry| ip_matches(entry, &ip))
+    {
+        return Err(AppError::Forbidden);
+    }
+
+    Ok(())
+}
+
+fn parse_ip_entry(entry: &str) -> Option<IpNet> {
+    let trimmed = entry.trim();
+    if let Ok(ip) = trimmed.parse::<IpAddr>() {
+        return Some(IpNet::from(ip));
+    }
+    trimmed.parse::<IpNet>().ok()
+}
+
+fn ip_matches(entry: &str, ip: &IpAddr) -> bool {
+    match parse_ip_entry(entry) {
+        Some(net) => net.contains(ip),
+        None => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{check_ip_policy, ip_matches, validate_ip_list};
+    use std::net::IpAddr;
+    use wallet_db::ChainGatewayKey;
+
+    fn key_with(whitelist: Vec<String>, blacklist: Vec<String>) -> ChainGatewayKey {
+        ChainGatewayKey {
+            id: uuid::Uuid::new_v4(),
+            api_key: "gw_test".into(),
+            name: "test".into(),
+            rate_limit_per_min: 60,
+            enabled: true,
+            allowed_chains: Vec::new(),
+            allowed_tier: "all".into(),
+            ip_whitelist: whitelist,
+            ip_blacklist: blacklist,
+            total_requests: 0,
+            created_at: jiff::Timestamp::now(),
+        }
+    }
+
+    #[test]
+    fn ip_matches_exact_and_cidr() {
+        let ip: IpAddr = "10.1.2.3".parse().unwrap();
+        assert!(ip_matches("10.1.2.3", &ip));
+        assert!(ip_matches("10.0.0.0/8", &ip));
+        assert!(!ip_matches("11.0.0.0/8", &ip));
+        assert!(!ip_matches("not-an-ip", &ip));
+    }
+
+    #[test]
+    fn no_lists_always_allows() {
+        let key = key_with(vec![], vec![]);
+        assert!(check_ip_policy(&key, Some("1.2.3.4")).is_ok());
+        assert!(check_ip_policy(&key, None).is_ok());
+    }
+
+    #[test]
+    fn whitelist_allows_only_matching() {
+        let key = key_with(vec!["192.168.1.0/24".into()], vec![]);
+        assert!(check_ip_policy(&key, Some("192.168.1.10")).is_ok());
+        assert!(check_ip_policy(&key, Some("10.0.0.1")).is_err());
+        assert!(check_ip_policy(&key, None).is_err());
+    }
+
+    #[test]
+    fn blacklist_rejects_matching() {
+        let key = key_with(vec![], vec!["203.0.113.7".into()]);
+        assert!(check_ip_policy(&key, Some("203.0.113.7")).is_err());
+        assert!(check_ip_policy(&key, Some("203.0.113.8")).is_ok());
+    }
+
+    #[test]
+    fn blacklist_wins_over_whitelist() {
+        let key = key_with(
+            vec!["10.0.0.0/8".into()],
+            vec!["10.0.0.5".into()],
+        );
+        assert!(check_ip_policy(&key, Some("10.0.0.5")).is_err());
+        assert!(check_ip_policy(&key, Some("10.0.0.6")).is_ok());
+    }
+
+    #[test]
+    fn ipv6_cidr_matches() {
+        let key = key_with(vec!["2001:db8::/32".into()], vec![]);
+        assert!(check_ip_policy(&key, Some("2001:db8::1")).is_ok());
+        assert!(check_ip_policy(&key, Some("2001:db9::1")).is_err());
+    }
+
+    #[test]
+    fn validate_ip_list_rejects_garbage() {
+        assert!(validate_ip_list(&["10.0.0.0/8".to_string()]).is_ok());
+        assert!(validate_ip_list(&["nope".to_string()]).is_err());
+        assert!(validate_ip_list(&["".to_string()]).is_err());
+        assert!(validate_ip_list(&["10.0.0.0/8".to_string(), "300.1.1.1".to_string()]).is_err());
+    }
 }

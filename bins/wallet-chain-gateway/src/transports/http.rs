@@ -3,7 +3,7 @@ use std::time::Duration;
 use serde_json::Value;
 use wallet_error::{AppError, AppResult};
 
-use super::EndpointHeaders;
+use super::{rpc_error, EndpointHeaders};
 
 pub async fn execute(
     client: &reqwest::Client,
@@ -30,8 +30,8 @@ pub async fn execute(
         .json()
         .await
         .map_err(|e| AppError::Unavailable(e.to_string()))?;
-    if v.get("error").is_some() {
-        return Err(AppError::Unavailable(format!("rpc error: {}", v["error"])));
+    if let Some(err) = rpc_error(&v) {
+        return Err(AppError::Unavailable(format!("rpc error: {err}")));
     }
     Ok(v)
 }

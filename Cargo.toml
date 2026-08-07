@@ -78,3 +78,4 @@ parking_lot = "0.12"
 rand = "0.8"
 url = "2"
 jiff = { version = "0.2", features = ["serde"] }
+ipnet = "2"

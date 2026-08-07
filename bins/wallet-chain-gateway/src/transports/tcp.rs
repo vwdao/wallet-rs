@@ -9,7 +9,7 @@ use tokio::time::timeout;
 use url::Url;
 use wallet_error::{AppError, AppResult};
 
-use super::ws_bridge;
+use super::{rpc_error, ws_bridge};
 
 pub async fn execute(url: &Url, body: &Value, request_timeout: Duration) -> AppResult<Value> {
     let host = url
@@ -61,8 +61,8 @@ pub async fn execute(url: &Url, body: &Value, request_timeout: Duration) -> AppR
         .map_err(|e| AppError::Unavailable(format!("invalid utf8 response: {e}")))?;
     let v: Value = serde_json::from_str(text)
         .map_err(|e| AppError::Unavailable(format!("invalid json response: {e}")))?;
-    if v.get("error").is_some() {
-        return Err(AppError::Unavailable(format!("rpc error: {}", v["error"])));
+    if let Some(err) = rpc_error(&v) {
+        return Err(AppError::Unavailable(format!("rpc error: {err}")));
     }
     Ok(v)
 }

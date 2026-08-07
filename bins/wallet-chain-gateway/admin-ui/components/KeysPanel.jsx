@@ -133,6 +133,8 @@ export function KeysPanel({ api }) {
                 <th>每分钟限流</th>
                 <th>层级</th>
                 <th>允许链</th>
+                <th>IP 白名单</th>
+                <th>IP 黑名单</th>
                 <th>请求数</th>
                 <th>启用</th>
                 <th>操作</th>
@@ -153,6 +155,12 @@ export function KeysPanel({ api }) {
                     {apiKey.allowed_chains?.length
                       ? apiKey.allowed_chains.map((chain) => chainName(chain)).join(', ')
                       : '全部'}
+                  </td>
+                  <td className="url" title={(apiKey.ip_whitelist || []).join(', ')}>
+                    {apiKey.ip_whitelist?.length ? apiKey.ip_whitelist.join(', ') : '不限'}
+                  </td>
+                  <td className="url" title={(apiKey.ip_blacklist || []).join(', ')}>
+                    {apiKey.ip_blacklist?.length ? apiKey.ip_blacklist.join(', ') : '无'}
                   </td>
                   <td>{apiKey.total_requests ?? 0}</td>
                   <td>
