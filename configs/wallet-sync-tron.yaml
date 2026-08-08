@@ -1,0 +1,19 @@
+chain_index: 195
+poll_interval_ms: 1000
+# start_height: 0  # optional backfill start (first block to sync on a fresh DB)
+# How many blocks to fetch from the RPC in parallel per tick. Tune to
+# roughly the number of healthy endpoints you have, or whatever the
+# gateway's per-endpoint QPS ceiling allows. 4 is enough for ~12s ETH
+# mainnet; bump it to 8-16 for high-BPS chains (Arbitrum/Base/OP/Polygon).
+block_fetch_concurrency: 4
+database:
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+nats:
+  url: "nats://127.0.0.1:4222"
+chain:
+  chain_index: 195
+  family: tron
+  confirmations: 12
+  endpoints:
+    - url: "grpc://127.0.0.1:50051/rpc/tron/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+      weight: 1

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use tracing::{error, info};
 use wallet_chain::{BlockSource, ChainHandle};
-use wallet_db::{Db, SyncCursorRepo};
+use wallet_db::{Db, SyncCursorRepo, TransactionRepo};
 use wallet_error::AppResult;
 use wallet_events::EventBus;
 use wallet_types::ChainIndex;
@@ -22,6 +22,7 @@ pub async fn start(
         .subscribe("wallet.sync.reindex", &durable)
         .await?;
     info!(durable, "reindex consumer started");
+    let repo = TransactionRepo::new(&db);
     loop {
         match sub.next().await {
             Ok(Some(env)) => {
@@ -62,17 +63,15 @@ pub async fn start(
                         Ok(raw_txs) => {
                             let normalized = parse_block(chain_index, height, raw_txs);
                             let tx_count = normalized.len();
-                            for tx in &normalized {
-                                if let Err(e) = wallet_db::TransactionRepo::new(&db)
-                                    .insert_normalized(chain_index, tx)
-                                    .await
-                                {
-                                    error!(height, error = %e, "reindex: insert failed");
-                                }
-                            }
-                            if let Err(e) = report_txs(bus.as_ref(), chain_index, &normalized).await
+                            // Persist + report concurrently, same as the
+                            // main sync loop, so reindex throughput is not
+                            // bounded by sequential per-tx DB calls.
+                            let persist = repo.insert_normalized_batch(chain_index, &normalized);
+                            let report = report_txs(bus.as_ref(), chain_index, &normalized);
+                            if let Err(e) =
+                                tokio::try_join!(persist, report)
                             {
-                                error!(height, error = %e, "reindex: report failed");
+                                error!(height, error = %e, "reindex: persist/report failed");
                             }
                             reindexed += 1;
                             if reindexed.is_multiple_of(100) {

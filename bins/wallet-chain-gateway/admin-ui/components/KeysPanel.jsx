@@ -145,7 +145,7 @@ export function KeysPanel({ api }) {
                 <tr key={apiKey.id}>
                   <td>{apiKey.name}</td>
                   <td className="url" title={apiKey.api_key}>{apiKey.api_key}</td>
-                  <td>{apiKey.rate_limit_per_min}</td>
+                  <td>{apiKey.rate_limit_per_min === 0 ? '不限' : apiKey.rate_limit_per_min}</td>
                   <td>
                     <Badge tone={apiKey.allowed_tier === 'paid' ? 'yellow' : 'green'}>
                       {TIER_LABELS[apiKey.allowed_tier] || apiKey.allowed_tier}

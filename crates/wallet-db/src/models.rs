@@ -141,9 +141,17 @@ pub struct Tx {
 
     pub value: Decimal,
 
+    pub gas_fee: Option<Decimal>,
+
     pub block_number: i64,
 
     pub status: String,
+
+    pub contract_address: Option<String>,
+
+    pub log_index: Option<i64>,
+
+    pub method: Option<String>,
 
     #[column(type = jsonb)]
     #[default(serde_json::json!({}))]
@@ -173,6 +181,18 @@ pub struct SyncCursor {
     pub chain_index: i64,
 
     pub height: i64,
+}
+
+#[derive(Debug, Clone, toasty::Model)]
+pub struct SyncSetting {
+    #[key]
+    pub chain_index: i64,
+
+    pub poll_interval_ms: i64,
+
+    pub confirmations: i64,
+
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, toasty::Model)]

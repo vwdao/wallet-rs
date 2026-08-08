@@ -242,6 +242,7 @@ impl AdminRpcEndpointService for AdminRpcSvc {
             headers,
             last_health_check: None,
             healthy: true,
+            archive_checked_at: None,
             avg_latency_ms: None,
             block_height: None,
             error_count: 0,

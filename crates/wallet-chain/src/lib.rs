@@ -12,6 +12,8 @@ pub mod evm;
 pub mod solana;
 #[cfg(feature = "tron")]
 pub mod tron;
+#[cfg(feature = "tron")]
+mod ton;
 
 pub use provider::{CircuitBreaker, RpcPool};
 pub use registry::{ChainHandle, ChainRegistry};

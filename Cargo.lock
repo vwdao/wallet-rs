@@ -577,6 +577,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "sha2 0.10.9",
+ "tinyvec",
+]
+
+[[package]]
 name = "bstr"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5750,6 +5760,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tron-rs"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af52bde4e2bde245973e2867be1f8fe072ec764c1254326a77c131701c528fd"
+dependencies = [
+ "prost 0.13.5",
+ "prost-types",
+ "serde",
+ "tonic",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6273,15 +6295,26 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64",
+ "bs58",
+ "bytes",
+ "futures",
  "hex",
+ "http",
  "parking_lot",
+ "prost 0.13.5",
+ "prost-types",
  "reqwest 0.12.28",
  "rust_decimal",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.19",
  "tokio",
+ "tokio-stream",
+ "tonic",
  "tracing",
+ "tron-rs",
+ "url",
  "wallet-config",
  "wallet-error",
  "wallet-types",
@@ -6459,6 +6492,7 @@ name = "wallet-sync"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "futures",
  "rust_decimal",
  "serde_json",
  "tokio",

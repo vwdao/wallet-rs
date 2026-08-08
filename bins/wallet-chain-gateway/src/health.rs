@@ -62,6 +62,13 @@ pub fn probe_method_for_chain(family: &str) -> &str {
     }
 }
 
+pub fn probe_params_for_chain(family: &str) -> serde_json::Value {
+    match family {
+        "solana" => serde_json::json!([{ "commitment": "finalized" }]),
+        _ => serde_json::json!([]),
+    }
+}
+
 pub struct HealthChecker {
     db: wallet_db::Db,
     http: reqwest::Client,
@@ -210,6 +217,11 @@ impl HealthChecker {
                 continue;
             }
             let max_height = heights.iter().copied().max().unwrap_or(0);
+            let family = family_map
+                .get(chain_index)
+                .map(|s| s.as_str())
+                .unwrap_or("evm");
+            let max_block_lag = cfg.max_block_lag_for_family(family);
             // tracing::info!(
             //     chain = chain_index,
             //     max_height,
@@ -232,12 +244,14 @@ impl HealthChecker {
             for mut ep in eps {
                 if let Some(h) = ep.block_height {
                     let lag = max_height.saturating_sub(h);
-                    if lag > cfg.max_block_lag.max(0) {
+                    if lag > max_block_lag {
                         tracing::warn!(
                             endpoint = %ep.url,
                             block_height = h,
                             max_height,
                             lag,
+                            max_block_lag,
+                            family,
                             "endpoint significantly behind, marking unhealthy"
                         );
                         ep.update()
@@ -256,7 +270,23 @@ impl HealthChecker {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_archive_method, ARCHIVE_METHODS};
+    use super::{is_archive_method, probe_params_for_chain, ARCHIVE_METHODS};
+    use serde_json::json;
+
+    #[test]
+    fn solana_probe_params_request_finalized_commitment() {
+        assert_eq!(
+            probe_params_for_chain("solana"),
+            json!([{ "commitment": "finalized" }])
+        );
+    }
+
+    #[test]
+    fn non_solana_probe_params_are_empty() {
+        for family in ["evm", "bitcoin", "tron", "unknown"] {
+            assert_eq!(probe_params_for_chain(family), json!([]), "family={family}");
+        }
+    }
 
     #[test]
     fn archive_methods_are_case_insensitive() {

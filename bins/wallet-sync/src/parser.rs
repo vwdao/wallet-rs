@@ -49,7 +49,7 @@ fn normalize_evm_tx(_chain_index: ChainIndex, _idx: usize, tx: &mut NormalizedTx
     }
     if let Some(val_hex) = raw.get("value").and_then(|v| v.as_str()) {
         if let Ok(raw_val) = u128::from_str_radix(val_hex.trim_start_matches("0x"), 16) {
-            tx.value = Amount::new(Decimal::from(raw_val), 18);
+            tx.value = Amount::new(wallet_types::decimal_from_u128(raw_val), 18);
         }
     }
     // Detect contract creation (to is null)
@@ -77,7 +77,11 @@ fn normalize_utxo_tx(_height: u64, _idx: usize, tx: &mut NormalizedTx) {
     }
 }
 
-/// TRON: extract from raw JSON.
+/// TRON: status from `ret`, and ensure address fields are base58 (`T…`).
+///
+/// gRPC → JSON conversion leaves `owner_address` / `to_address` as `0x41…`
+/// hex in `raw`; [`wallet_chain::tron::normalize_tron_address`] converts the
+/// normalized columns. Raw JSON is left unchanged.
 fn normalize_tron_tx(_height: u64, _idx: usize, tx: &mut NormalizedTx) {
     let raw = &tx.raw;
     if let Some(ret) = raw.get("ret").and_then(|v| v.as_array()) {
@@ -93,7 +97,9 @@ fn normalize_tron_tx(_height: u64, _idx: usize, tx: &mut NormalizedTx) {
             };
         }
     }
-    if tx.from.is_none() {
+    if let Some(from) = tx.from.take() {
+        tx.from = wallet_chain::tron::normalize_tron_address(from.as_str()).or(Some(from));
+    } else {
         tx.from = raw
             .get("raw_data")
             .and_then(|r| r.get("contract"))
@@ -103,7 +109,14 @@ fn normalize_tron_tx(_height: u64, _idx: usize, tx: &mut NormalizedTx) {
             .and_then(|p| p.get("value"))
             .and_then(|v| v.get("owner_address"))
             .and_then(|v| v.as_str())
-            .map(Address::new);
+            .and_then(wallet_chain::tron::normalize_tron_address);
+    }
+    if let Some(to) = tx.to.take() {
+        tx.to = wallet_chain::tron::normalize_tron_address(to.as_str()).or(Some(to));
+    }
+    if let Some(contract) = tx.contract_address.take() {
+        tx.contract_address =
+            wallet_chain::tron::normalize_tron_address(contract.as_str()).or(Some(contract));
     }
 }
 
@@ -119,9 +132,13 @@ mod tests {
             from: None,
             to: None,
             value: Amount::zero(18),
+            gas_fee: None,
             block_number: 0,
             status: TxStatus::Pending,
             raw,
+            contract_address: None,
+            log_index: None,
+            method: None,
         }
     }
 
@@ -177,12 +194,52 @@ mod tests {
         let raw = json!({
             "raw_data": {
                 "contract": [{
-                    "parameter": { "value": { "owner_address": "T-owner" } }
+                    "parameter": { "value": { "owner_address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" } }
                 }]
             }
         });
         let txs = parse_block(ChainIndex::TRON, 5, vec![tx("0x1", raw)]);
-        assert_eq!(txs[0].from.as_ref().unwrap().as_str(), "T-owner");
+        assert_eq!(
+            txs[0].from.as_ref().unwrap().as_str(),
+            "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+        );
+    }
+
+    #[test]
+    fn test_tron_hex_owner_address_becomes_base58() {
+        let raw = json!({
+            "raw_data": {
+                "contract": [{
+                    "parameter": {
+                        "value": {
+                            "owner_address": "0x41a614f803b6fd780986a42c78ec9c7f77e6ded13c"
+                        }
+                    }
+                }]
+            }
+        });
+        let txs = parse_block(ChainIndex::TRON, 5, vec![tx("0x1", raw)]);
+        assert_eq!(
+            txs[0].from.as_ref().unwrap().as_str(),
+            "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+        );
+    }
+
+    #[test]
+    fn test_tron_rewrites_hex_from_to_fields() {
+        let mut t = tx("0x1", json!({}));
+        t.from = Some(Address::new("0x41a614f803b6fd780986a42c78ec9c7f77e6ded13c"));
+        t.to = Some(Address::new("41a614f803b6fd780986a42c78ec9c7f77e6ded13c"));
+        t.contract_address =
+            Some(Address::new("0x41a614f803b6fd780986a42c78ec9c7f77e6ded13c"));
+        let txs = parse_block(ChainIndex::TRON, 5, vec![t]);
+        let out = &txs[0];
+        assert_eq!(out.from.as_ref().unwrap().as_str(), "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t");
+        assert_eq!(out.to.as_ref().unwrap().as_str(), "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t");
+        assert_eq!(
+            out.contract_address.as_ref().unwrap().as_str(),
+            "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+        );
     }
 
     #[test]

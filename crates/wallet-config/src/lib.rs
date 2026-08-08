@@ -120,10 +120,24 @@ pub struct SyncConfig {
     /// When absent, sync starts at the current safe tip.
     #[serde(default)]
     pub start_height: Option<u64>,
+    /// How many blocks to fetch from the RPC in parallel inside one tick.
+    ///
+    /// High-BPS chains (Arbitrum, Base, Optimism, Polygon) produce blocks
+    /// faster than a single sequential `fetch_block_txs` round trip can
+    /// keep up with, so we batch `block_fetch_concurrency` heights per
+    /// `join_all` and then process them in height order to keep the cursor
+    /// monotonic. Tune to roughly the number of healthy RPC endpoints you
+    /// have, or to whatever the gateway's per-endpoint QPS ceiling allows.
+    #[serde(default = "default_block_fetch_concurrency")]
+    pub block_fetch_concurrency: usize,
 }
 
 fn default_poll_ms() -> u64 {
     2000
+}
+
+fn default_block_fetch_concurrency() -> usize {
+    4
 }
 
 #[derive(Debug, Clone, Deserialize)]

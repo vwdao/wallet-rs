@@ -128,6 +128,16 @@ impl Amount {
     }
 }
 
+/// Convert a `u128` to `Decimal`, saturating at `Decimal::MAX` instead of
+/// panicking. `Decimal::from(u128)` panics for values above 2^96-1.
+pub fn decimal_from_u128(v: u128) -> Decimal {
+    if v >> 96 != 0 {
+        Decimal::MAX
+    } else {
+        Decimal::from(v)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TxStatus {
@@ -154,9 +164,20 @@ pub struct NormalizedTx {
     pub from: Option<Address>,
     pub to: Option<Address>,
     pub value: Amount,
+    /// Native gas fee paid for the tx (raw integer, decimals per chain).
+    pub gas_fee: Option<Amount>,
     pub block_number: u64,
     pub status: TxStatus,
     pub raw: serde_json::Value,
+    /// Token contract / mint address for token transfers (ERC20, SPL, TRC20);
+    /// `None` for native transfers.
+    pub contract_address: Option<Address>,
+    /// Log index within the tx that produced this record; disambiguates
+    /// multiple records sharing the same tx hash and contract.
+    pub log_index: Option<u64>,
+    /// Method/selector that triggered the transfer (e.g. `transfer`,
+    /// `transferFrom`, `approve`, or a raw 4-byte selector).
+    pub method: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,5 +208,19 @@ impl FromStr for ChainIndex {
         s.parse::<i64>()
             .map(ChainIndex)
             .map_err(|_| ParseError::ChainIndex(s.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decimal_from_u128_saturates_above_2_96() {
+        assert_eq!(decimal_from_u128(0), Decimal::ZERO);
+        assert_eq!(decimal_from_u128(1 << 96), Decimal::MAX);
+        assert_eq!(decimal_from_u128(u128::MAX), Decimal::MAX);
+        let max = (1u128 << 96) - 1;
+        assert_eq!(decimal_from_u128(max), Decimal::from(max));
     }
 }

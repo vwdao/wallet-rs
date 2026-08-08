@@ -42,6 +42,20 @@ describe('keyToPayload', () => {
     })
   })
 
+  it('preserves zero rate limit as unlimited', () => {
+    expect(keyToPayload({
+      name: 'unlimited',
+      rate_limit_per_min: '0',
+      enabled: true,
+    }).rate_limit_per_min).toBe(0)
+
+    expect(keyToPayload({
+      name: 'unlimited',
+      rate_limit_per_min: 0,
+      enabled: true,
+    }).rate_limit_per_min).toBe(0)
+  })
+
   it('treats missing list strings as empty lists', () => {
     expect(keyToPayload({ name: 'x', enabled: true })).toEqual({
       name: 'x',

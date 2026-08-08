@@ -50,6 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             poll_interval_ms: cfg.poll_interval_ms,
             confirmations: cfg.chain.confirmations,
             start_height: cfg.start_height,
+            block_fetch_concurrency: cfg.block_fetch_concurrency,
         }) => { r?; }
         r = reindex::start(db_for_reindex, chain_index, Arc::new(handle_for_reindex), events_for_reindex) => { r?; }
         _ = tokio::signal::ctrl_c() => {

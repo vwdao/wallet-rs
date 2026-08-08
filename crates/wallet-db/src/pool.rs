@@ -26,6 +26,7 @@ impl Db {
                 models::Tx,
                 models::GasPool,
                 models::SyncCursor,
+                models::SyncSetting,
                 models::Dapp,
                 models::SwapProvider,
                 models::LatestPrice,

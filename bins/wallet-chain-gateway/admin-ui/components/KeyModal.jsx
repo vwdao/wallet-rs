@@ -31,6 +31,13 @@ function keyToForm(key) {
   }
 }
 
+function parseRateLimit(value) {
+  if (value === '' || value == null) return 60
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return 60
+  return Math.trunc(n)
+}
+
 export function keyToPayload(form) {
   const chainsStr = form.chainsStr ?? form.allowed_chains ?? ''
   const whitelistStr = form.ipWhitelistStr ?? form.ip_whitelist ?? ''
@@ -38,7 +45,7 @@ export function keyToPayload(form) {
 
   return {
     name: form.name.trim(),
-    rate_limit_per_min: Number(form.rate_limit_per_min) || 60,
+    rate_limit_per_min: parseRateLimit(form.rate_limit_per_min),
     allowed_tier: form.allowed_tier || 'all',
     allowed_chains: chainsStr
       ? chainsStr.split(',').map((value) => parseInt(value.trim(), 10)).filter(Boolean)
@@ -118,10 +125,10 @@ export function KeyModal({ open, apiKey, api, onClose, onSaved }) {
               />
             </Field>
           </div>
-          <Field label="每分钟限流">
+          <Field label="每分钟限流" hint="0 表示不限制">
             <input
               type="number"
-              min="1"
+              min="0"
               value={form.rate_limit_per_min}
               onChange={(event) => update('rate_limit_per_min', event.target.value)}
             />

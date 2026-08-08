@@ -8,6 +8,7 @@ use wallet_error::{AppError, AppResult};
 
 use crate::health::is_archive_method;
 use crate::protocol::{parse_endpoint_url_with, EndpointProtocol};
+use crate::settings::GatewayConfig;
 use crate::transports::{self, EndpointHeaders};
 
 #[derive(Debug, Clone)]
@@ -33,6 +34,7 @@ pub struct SelectedEndpoint {
 #[derive(Debug)]
 struct ChainEndpoints {
     endpoints: Vec<CachedEndpoint>,
+    family: String,
     max_block_height: Option<i64>,
     refreshed_at: Instant,
 }
@@ -99,16 +101,21 @@ impl RpcRouter {
         }
     }
 
-    async fn get_endpoints(&self, chain_index: i64) -> AppResult<Vec<CachedEndpoint>> {
+    async fn get_chain_endpoints(&self, chain_index: i64) -> AppResult<ChainEndpoints> {
         if let Some(entry) = self.cache.get(&chain_index) {
             if entry.refreshed_at.elapsed() < self.cache_ttl {
-                return Ok(entry.endpoints.clone());
+                return Ok(ChainEndpoints {
+                    endpoints: entry.endpoints.clone(),
+                    family: entry.family.clone(),
+                    max_block_height: entry.max_block_height,
+                    refreshed_at: entry.refreshed_at,
+                });
             }
         }
         self.refresh_endpoints(chain_index).await
     }
 
-    async fn refresh_endpoints(&self, chain_index: i64) -> AppResult<Vec<CachedEndpoint>> {
+    async fn refresh_endpoints(&self, chain_index: i64) -> AppResult<ChainEndpoints> {
         let mut db = self.db.clone_inner();
         let rows: Vec<RpcEndpoint> = RpcEndpoint::filter(
             RpcEndpoint::fields()
@@ -120,6 +127,17 @@ impl RpcRouter {
         .exec(&mut db)
         .await
         .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let networks: Vec<wallet_db::Network> =
+            wallet_db::Network::filter(wallet_db::Network::fields().chain_index().eq(chain_index))
+                .exec(&mut db)
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))?;
+        let family = networks
+            .into_iter()
+            .next()
+            .map(|n| n.family)
+            .unwrap_or_else(|| "evm".into());
 
         let eps: Vec<CachedEndpoint> = rows
             .into_iter()
@@ -138,15 +156,22 @@ impl RpcRouter {
 
         let max_block_height = eps.iter().filter_map(|e| e.block_height).max();
 
+        let cached = ChainEndpoints {
+            endpoints: eps,
+            family,
+            max_block_height,
+            refreshed_at: Instant::now(),
+        };
         self.cache.insert(
             chain_index,
             ChainEndpoints {
-                endpoints: eps.clone(),
-                max_block_height,
-                refreshed_at: Instant::now(),
+                endpoints: cached.endpoints.clone(),
+                family: cached.family.clone(),
+                max_block_height: cached.max_block_height,
+                refreshed_at: cached.refreshed_at,
             },
         );
-        Ok(eps)
+        Ok(cached)
     }
 
     pub async fn select_endpoint(
@@ -154,11 +179,12 @@ impl RpcRouter {
         chain_index: i64,
         method: Option<&str>,
         user_tier: &str,
-        max_block_lag: i64,
+        cfg: &GatewayConfig,
         require_ws_tunnel: bool,
         allow_archive_fallback: bool,
     ) -> AppResult<SelectedEndpoint> {
-        let all_eps = self.get_endpoints(chain_index).await?;
+        let cached = self.get_chain_endpoints(chain_index).await?;
+        let all_eps = &cached.endpoints;
         if all_eps.is_empty() {
             return Err(AppError::Unavailable(format!(
                 "no healthy rpc endpoints for chain {chain_index}"
@@ -166,9 +192,8 @@ impl RpcRouter {
         }
 
         let need_archive = method.map(is_archive_method).unwrap_or(false);
-
-        let cached = self.cache.get(&chain_index);
-        let max_height = cached.as_ref().and_then(|c| c.max_block_height);
+        let max_height = cached.max_block_height;
+        let max_block_lag = cfg.max_block_lag_for_family(&cached.family);
 
         let filtered: Vec<&CachedEndpoint> = all_eps
             .iter()
@@ -297,19 +322,18 @@ impl RpcRouter {
         body: &serde_json::Value,
         user_tier: &str,
         timeout: Duration,
-        max_retries: u32,
-        max_block_lag: i64,
+        cfg: &GatewayConfig,
     ) -> AppResult<(String, serde_json::Value)> {
         let method = body.get("method").and_then(|v| v.as_str());
 
         let mut last_err = None;
-        for attempt in 0..max_retries.max(1) {
+        for attempt in 0..cfg.max_retries.max(1) {
             let selection = match self
                 .select_endpoint(
                     chain_index,
                     method,
                     user_tier,
-                    max_block_lag.max(0),
+                    cfg,
                     false,
                     attempt > 0,
                 )

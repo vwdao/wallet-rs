@@ -18,6 +18,10 @@ message Transaction {
   string value = 5;
   uint64 block_number = 6;
   string status = 7;
+  string contract_address = 8;
+  string method = 9;
+  uint64 log_index = 10;
+  string gas_fee = 11;
 }
 
 message GetTransactionRequest {

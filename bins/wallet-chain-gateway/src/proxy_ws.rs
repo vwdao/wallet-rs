@@ -43,7 +43,7 @@ pub async fn proxy_rpc_ws(
             chain_index,
             method,
             &user_tier,
-            cfg.max_block_lag.max(0),
+            &cfg,
             true,
             false,
         )

@@ -227,7 +227,7 @@ async fn proxy_call(req: http::Request<Incoming>, state: &Gw, client_ip: String)
 
     let selection = match state
         .router
-        .select_endpoint(chain_index, None, &key_row.allowed_tier, cfg.max_block_lag.max(0), false, false)
+        .select_endpoint(chain_index, None, &key_row.allowed_tier, &cfg, false, false)
         .await
     {
         Ok(s) => s,

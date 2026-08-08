@@ -1,6 +1,11 @@
 chain_index: 60
-poll_interval_ms: 2000
+poll_interval_ms: 1000
 # start_height: 0  # optional backfill start (first block to sync on a fresh DB)
+# How many blocks to fetch from the RPC in parallel per tick. Tune to
+# roughly the number of healthy endpoints you have, or whatever the
+# gateway's per-endpoint QPS ceiling allows. 4 is enough for ~12s ETH
+# mainnet; bump it to 8-16 for high-BPS chains (Arbitrum/Base/OP/Polygon).
+block_fetch_concurrency: 4
 database:
   url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
 nats:

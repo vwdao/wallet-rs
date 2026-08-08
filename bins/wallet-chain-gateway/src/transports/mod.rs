@@ -75,7 +75,7 @@ pub async fn probe(
         "jsonrpc": "2.0",
         "id": 1,
         "method": method,
-        "params": [],
+        "params": crate::health::probe_params_for_chain(family),
     });
     let start = std::time::Instant::now();
     let result = match protocol {

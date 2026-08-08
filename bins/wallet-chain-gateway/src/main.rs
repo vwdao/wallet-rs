@@ -245,8 +245,7 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
                 &body,
                 &key_row.allowed_tier,
                 timeout,
-                cfg.max_retries,
-                cfg.max_block_lag,
+                &cfg,
             )
             .await;
         let latency = start.elapsed().as_millis() as i32;

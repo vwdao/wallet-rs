@@ -541,6 +541,10 @@ pub fn tx_from_row(t: wallet_db::TxRow) -> Transaction {
         value: t.value.to_string(),
         block_number: t.block_number as u64,
         status: t.status,
+        contract_address: t.contract_address.unwrap_or_default(),
+        method: t.method.unwrap_or_default(),
+        log_index: t.log_index.map(|i| i as u64).unwrap_or_default(),
+        gas_fee: t.gas_fee.map(|g| g.to_string()).unwrap_or_default(),
     }
 }
 
