@@ -1,0 +1,12 @@
+[package]
+name = "wallet-gateway"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+salvo = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+wallet-proto = { workspace = true }

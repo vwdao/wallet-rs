@@ -428,24 +428,25 @@ async fn list_networks(req: &mut Request, depot: &mut Depot, res: &mut Response)
 // ─── Endpoints ─────────────────────────────────────────
 
 fn infer_network_meta(chain_index: i64) -> (String, &'static str) {
+    use wallet_types::ChainFamily;
     let (name, family) = match chain_index {
-        0 => ("BTC", "bitcoin"),
-        3 => ("DOGE", "evm"),
-        60 => ("ETH", "evm"),
-        133 => ("ZEC", "evm"),
-        195 => ("TRON", "tron"),
-        501 => ("SOL", "solana"),
-        966 => ("POL", "evm"),
-        8453 => ("BASE", "evm"),
-        20000714 => ("BSC", "evm"),
-        10042221 => ("ARB", "evm"),
-        10000070 => ("OP", "evm"),
-        10009000 => ("AVAX", "evm"),
-        10000999 => ("HYPER", "evm"),
-        10004663 => ("ROBIN", "evm"),
-        _ => ("", "evm"),
+        0 => ("BTC", ChainFamily::for_index(wallet_types::ChainIndex::BTC)),
+        3 => ("DOGE", ChainFamily::for_index(wallet_types::ChainIndex::DOGE)),
+        60 => ("ETH", ChainFamily::for_index(wallet_types::ChainIndex::ETH)),
+        133 => ("ZEC", ChainFamily::for_index(wallet_types::ChainIndex::ZCASH)),
+        195 => ("TRON", ChainFamily::for_index(wallet_types::ChainIndex::TRON)),
+        501 => ("SOL", ChainFamily::for_index(wallet_types::ChainIndex::SOL)),
+        966 => ("POL", ChainFamily::for_index(wallet_types::ChainIndex::POL)),
+        8453 => ("BASE", ChainFamily::for_index(wallet_types::ChainIndex::BASE)),
+        20000714 => ("BSC", ChainFamily::for_index(wallet_types::ChainIndex::BSC)),
+        10042221 => ("ARB", ChainFamily::for_index(wallet_types::ChainIndex::ARB)),
+        10000070 => ("OP", ChainFamily::for_index(wallet_types::ChainIndex::OP)),
+        10009000 => ("AVAX", ChainFamily::for_index(wallet_types::ChainIndex::AVAX)),
+        10000999 => ("HYPER", ChainFamily::for_index(wallet_types::ChainIndex::HYPERLIQUID)),
+        10004663 => ("ROBIN", ChainFamily::for_index(wallet_types::ChainIndex::ROBINHOOD)),
+        _ => ("", ChainFamily::for_index(wallet_types::ChainIndex::ETH)),
     };
-    (name.to_string(), family)
+    (name.to_string(), family.map(|f| f.as_str()).unwrap_or("evm"))
 }
 
 async fn ensure_network(db: &wallet_db::Db, chain_index: i64) -> AppResult<Network> {
@@ -1620,7 +1621,9 @@ mod tests {
     #[test]
     fn infer_network_meta_known_chains() {
         assert_eq!(infer_network_meta(0), ("BTC".into(), "bitcoin"));
+        assert_eq!(infer_network_meta(3), ("DOGE".into(), "bitcoin"));
         assert_eq!(infer_network_meta(60), ("ETH".into(), "evm"));
+        assert_eq!(infer_network_meta(133), ("ZEC".into(), "bitcoin"));
         assert_eq!(infer_network_meta(195), ("TRON".into(), "tron"));
         assert_eq!(infer_network_meta(501), ("SOL".into(), "solana"));
     }

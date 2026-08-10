@@ -66,6 +66,18 @@ impl ChainFamily {
             _ => None,
         }
     }
+
+    /// Canonical string form used across the platform (DB rows, gateway
+    /// probing, sync parsers). UTXO-family chains other than Bitcoin share the
+    /// `bitcoin` protocol semantics (no EVM-style JSON-RPC).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Evm => "evm",
+            Self::Solana => "solana",
+            Self::Bitcoin | Self::UtxoOther => "bitcoin",
+            Self::Tron => "tron",
+        }
+    }
 }
 
 /// Opaque chain address (hex / base58 / bech32 string).

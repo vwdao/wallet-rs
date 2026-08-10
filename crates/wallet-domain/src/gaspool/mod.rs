@@ -22,12 +22,21 @@ pub trait Paymaster: Send + Sync {
 pub struct EvmEip7702Paymaster {
     pub rpc_url: String,
     pub paymaster_address: String,
+    pub signing_service_url: Option<String>,
     pub http: reqwest::Client,
 }
 
 #[async_trait]
 impl Paymaster for EvmEip7702Paymaster {
     async fn sponsor(&self, user: &Address, payload: &[u8]) -> AppResult<SponsorResult> {
+        // 0. Sponsorship requires a signing service that owns the paymaster
+        // key. Fail fast instead of fetching chain state we can't use.
+        let Some(signing_url) = &self.signing_service_url else {
+            return Err(AppError::Unimplemented(
+                "EIP-7702 paymaster requires EVM_SIGNING_SERVICE_URL to sign the sponsored tx".into(),
+            ));
+        };
+
         // 1. Fetch user nonce
         let nonce_resp = rpc_call(
             &self.http,
@@ -55,11 +64,13 @@ impl Paymaster for EvmEip7702Paymaster {
             .unwrap_or("0x3B9ACA00");
         let max_priority = "0x59682F00"; // 1.5 gwei
 
-        // 3. Encode EIP-7702 authorization list + delegatecall
-        // The payload IS the user's op; wrap it as a sponsored tx
+        // 3. Encode EIP-7702 authorization list + delegatecall.
+        // The payload IS the user's op; wrap it as a sponsored tx.
         let input_data = format!("0x{}", hex::encode(payload));
 
-        // 4. Build the EIP-7702 tx
+        // 4. Build the EIP-7702 tx (type 0x4). `eth_sendRawTransaction` would
+        // require an RLP-encoded signed tx; instead we hand the unsigned object
+        // to a configured signing service that owns the paymaster key.
         let tx = json!({
             "from": self.paymaster_address,
             "to": user.as_str(),
@@ -73,20 +84,34 @@ impl Paymaster for EvmEip7702Paymaster {
             "chainId": "0x1",
         });
 
-        // 5. Sign with paymaster key (offline) and broadcast
-        let sign_resp = rpc_call(
-            &self.http,
-            &self.rpc_url,
-            "eth_sendRawTransaction",
-            json!([tx]),
-        )
-        .await?;
-
-        let tx_hash = sign_resp
-            .get("result")
+        // 5. Sign via dedicated signing service (holds the paymaster key).
+        let resp = self
+            .http
+            .post(signing_url)
+            .json(&tx)
+            .send()
+            .await
+            .map_err(|e| AppError::Unavailable(format!("evm signing service: {e}")))?;
+        if !resp.status().is_success() {
+            return Err(AppError::Unavailable(format!(
+                "evm signing service HTTP {}",
+                resp.status()
+            )));
+        }
+        let result: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| AppError::Unavailable(format!("evm signing parse: {e}")))?;
+        let tx_hash = result
+            .pointer("/result")
             .and_then(|r| r.as_str())
-            .unwrap_or("")
+            .unwrap_or_default()
             .to_string();
+        if tx_hash.is_empty() {
+            return Err(AppError::Unavailable(
+                "evm signing service returned no tx hash".into(),
+            ));
+        }
 
         Ok(SponsorResult {
             status: "submitted".into(),
@@ -189,12 +214,21 @@ impl Paymaster for SolanaPaymaster {
 pub struct TronPaymaster {
     pub rpc_url: String,
     pub paymaster_address: String,
+    pub signing_service_url: Option<String>,
     pub http: reqwest::Client,
 }
 
 #[async_trait]
 impl Paymaster for TronPaymaster {
     async fn sponsor(&self, user: &Address, _payload: &[u8]) -> AppResult<SponsorResult> {
+        // 0. `createtransaction` returns an *unsigned* tx; it must be signed
+        // with the paymaster key before broadcast. Require a signing service.
+        let Some(signing_url) = &self.signing_service_url else {
+            return Err(AppError::Unimplemented(
+                "TRON paymaster requires TRON_SIGNING_SERVICE_URL to sign the sponsored tx".into(),
+            ));
+        };
+
         // 1. Get latest block
         let block_resp =
             tron_post(&self.http, &self.rpc_url, "/wallet/getnowblock", json!({})).await?;
@@ -226,33 +260,53 @@ impl Paymaster for TronPaymaster {
             .and_then(|t| t.as_str())
             .unwrap_or("")
             .to_string();
-
-        // 3. Broadcast
-        if !tx_id.is_empty() {
-            let broadcast_body = json!({ "transaction": create_resp });
-            let broadcast_resp = tron_post(
-                &self.http,
-                &self.rpc_url,
-                "/wallet/broadcasttransaction",
-                broadcast_body,
-            )
-            .await?;
-            let success = broadcast_resp
-                .get("result")
-                .and_then(|r| r.as_bool())
-                .unwrap_or(false);
-            return Ok(SponsorResult {
-                status: if success {
-                    "submitted".into()
-                } else {
-                    "broadcast_failed".into()
-                },
-                tx_hash: tx_id,
-            });
+        if tx_id.is_empty() {
+            return Err(AppError::Unavailable(
+                "tron createtransaction returned no txID".into(),
+            ));
         }
 
+        // 3. Sign with the paymaster key via the signing service, then broadcast.
+        let sign_resp = self
+            .http
+            .post(signing_url)
+            .json(&create_resp)
+            .send()
+            .await
+            .map_err(|e| AppError::Unavailable(format!("tron signing service: {e}")))?;
+        if !sign_resp.status().is_success() {
+            return Err(AppError::Unavailable(format!(
+                "tron signing service HTTP {}",
+                sign_resp.status()
+            )));
+        }
+        let signed: serde_json::Value = sign_resp
+            .json()
+            .await
+            .map_err(|e| AppError::Unavailable(format!("tron signing parse: {e}")))?;
+
+        let broadcast_resp = tron_post(
+            &self.http,
+            &self.rpc_url,
+            "/wallet/broadcasttransaction",
+            signed,
+        )
+        .await?;
+        let success = broadcast_resp
+            .get("result")
+            .and_then(|r| r.as_bool())
+            .unwrap_or(false);
+        if !success {
+            let message = broadcast_resp
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("unknown");
+            return Err(AppError::Unavailable(format!(
+                "tron broadcast rejected: {message}"
+            )));
+        }
         Ok(SponsorResult {
-            status: "pending".into(),
+            status: "submitted".into(),
             tx_hash: tx_id,
         })
     }
@@ -273,9 +327,16 @@ async fn rpc_call(
         .send()
         .await
         .map_err(|e| AppError::Unavailable(format!("paymaster rpc: {e}")))?;
-    resp.json()
+    let v: serde_json::Value = resp
+        .json()
         .await
-        .map_err(|e| AppError::Unavailable(format!("paymaster rpc parse: {e}")))
+        .map_err(|e| AppError::Unavailable(format!("paymaster rpc parse: {e}")))?;
+    if let Some(err) = v.get("error") {
+        return Err(AppError::Unavailable(format!(
+            "paymaster rpc {method} error: {err}"
+        )));
+    }
+    Ok(v)
 }
 
 async fn tron_post(
@@ -291,9 +352,22 @@ async fn tron_post(
         .send()
         .await
         .map_err(|e| AppError::Unavailable(format!("tron paymaster: {e}")))?;
-    resp.json()
+    if !resp.status().is_success() {
+        return Err(AppError::Unavailable(format!(
+            "tron paymaster {path} HTTP {}",
+            resp.status()
+        )));
+    }
+    let v: serde_json::Value = resp
+        .json()
         .await
-        .map_err(|e| AppError::Unavailable(format!("tron paymaster parse: {e}")))
+        .map_err(|e| AppError::Unavailable(format!("tron paymaster parse: {e}")))?;
+    if let Some(err) = v.get("Error") {
+        return Err(AppError::Unavailable(format!(
+            "tron paymaster {path} error: {err}"
+        )));
+    }
+    Ok(v)
 }
 
 // ── Service ──────────────────────────────────────────────────────────────
@@ -318,15 +392,22 @@ impl<'a> GasPoolService<'a> {
         if enabled {
             let pool = GasPoolRepo::new(&self.state.db).get(chain_index).await?;
             let pool = pool.ok_or_else(|| AppError::NotFound(format!("gas pool {chain_index}")))?;
-            if pool.hot_wallet.is_empty() || pool.cold_wallet.is_empty() {
-                return Err(AppError::InvalidArgument(
-                    "cannot enable gas pool without hot_wallet and cold_wallet configured".into(),
-                ));
+            if let Err(e) = Self::validate_wallets(&pool.hot_wallet, &pool.cold_wallet) {
+                return Err(e);
             }
         }
         GasPoolRepo::new(&self.state.db)
             .set_enabled(chain_index, enabled)
             .await
+    }
+
+    fn validate_wallets(hot_wallet: &str, cold_wallet: &str) -> AppResult<()> {
+        if hot_wallet.is_empty() || cold_wallet.is_empty() {
+            return Err(AppError::InvalidArgument(
+                "cannot enable gas pool without hot_wallet and cold_wallet configured".into(),
+            ));
+        }
+        Ok(())
     }
 
     pub async fn sponsor(
@@ -355,6 +436,7 @@ impl<'a> GasPoolService<'a> {
             ChainFamily::Evm => Box::new(EvmEip7702Paymaster {
                 rpc_url,
                 paymaster_address: pool.hot_wallet.clone(),
+                signing_service_url: std::env::var("EVM_SIGNING_SERVICE_URL").ok(),
                 http: self.state.http.clone(),
             }),
             ChainFamily::Solana => Box::new(SolanaPaymaster {
@@ -364,10 +446,57 @@ impl<'a> GasPoolService<'a> {
             ChainFamily::Tron => Box::new(TronPaymaster {
                 rpc_url,
                 paymaster_address: pool.hot_wallet.clone(),
+                signing_service_url: std::env::var("TRON_SIGNING_SERVICE_URL").ok(),
                 http: self.state.http.clone(),
             }),
             _ => return Err(AppError::Unimplemented("paymaster for chain family".into())),
         };
         pm.sponsor(user, payload).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_http() -> reqwest::Client {
+        reqwest::Client::new()
+    }
+
+    #[tokio::test]
+    async fn evm_paymaster_fails_fast_without_signing_service() {
+        let pm = EvmEip7702Paymaster {
+            rpc_url: "http://127.0.0.1:1".into(),
+            paymaster_address: "0xpaymaster".into(),
+            signing_service_url: None,
+            http: empty_http(),
+        };
+        let err = pm
+            .sponsor(&Address::new("0xuser"), b"op")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Unimplemented(_)), "got {err:?}");
+    }
+
+    #[tokio::test]
+    async fn tron_paymaster_fails_fast_without_signing_service() {
+        let pm = TronPaymaster {
+            rpc_url: "http://127.0.0.1:1".into(),
+            paymaster_address: "Tpaymaster".into(),
+            signing_service_url: None,
+            http: empty_http(),
+        };
+        let err = pm
+            .sponsor(&Address::new("Tuser"), b"op")
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AppError::Unimplemented(_)), "got {err:?}");
+    }
+
+    #[test]
+    fn gas_pool_enable_requires_wallets() {
+        let err = GasPoolService::validate_wallets("", "");
+        assert!(err.is_err());
+        assert!(GasPoolService::validate_wallets("0xhot", "0xcold").is_ok());
     }
 }

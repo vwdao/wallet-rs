@@ -43,14 +43,19 @@ pub trait SwapProvider: Send + Sync {
     ) -> AppResult<BuiltSwap>;
 }
 
+/// Map a platform `ChainIndex` (SLIP-44 style) to the EVM chain id used by
+/// DEX provider APIs. The two numbering schemes differ: e.g. BSC is
+/// `ChainIndex(20000714)` but EVM chain id `56`.
 fn chain_id_from_index(ci: ChainIndex) -> AppResult<u64> {
-    match ci.as_i64() {
-        60 => Ok(1),        // ETH mainnet
-        56 => Ok(56),       // BSC
-        137 => Ok(137),     // Polygon
-        42161 => Ok(42161), // Arbitrum
-        10 => Ok(10),       // Optimism
-        8453 => Ok(8453),   // Base
+    match ci {
+        ChainIndex::ETH => Ok(1),       // ETH mainnet
+        ChainIndex::BSC => Ok(56),      // BSC
+        ChainIndex::POL => Ok(137),     // Polygon
+        ChainIndex::ARB => Ok(42161),   // Arbitrum
+        ChainIndex::OP => Ok(10),       // Optimism
+        ChainIndex::BASE => Ok(8453),   // Base
+        ChainIndex::AVAX => Ok(43114),  // Avalanche C-Chain
+        ChainIndex::HYPERLIQUID => Ok(999), // HyperEVM
         other => Err(AppError::InvalidArgument(format!(
             "unsupported chain_index {other} for swap"
         ))),
@@ -574,5 +579,34 @@ impl<'a> SwapService<'a> {
                 user,
             )
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chain_id_from_index_maps_platform_index_to_evm_chain_id() {
+        assert_eq!(chain_id_from_index(ChainIndex::ETH).unwrap(), 1);
+        assert_eq!(chain_id_from_index(ChainIndex::BSC).unwrap(), 56);
+        assert_eq!(chain_id_from_index(ChainIndex::POL).unwrap(), 137);
+        assert_eq!(chain_id_from_index(ChainIndex::ARB).unwrap(), 42161);
+        assert_eq!(chain_id_from_index(ChainIndex::OP).unwrap(), 10);
+        assert_eq!(chain_id_from_index(ChainIndex::BASE).unwrap(), 8453);
+        assert_eq!(chain_id_from_index(ChainIndex::AVAX).unwrap(), 43114);
+    }
+
+    #[test]
+    fn chain_id_from_index_rejects_non_evm_chains() {
+        assert!(chain_id_from_index(ChainIndex::BTC).is_err());
+        assert!(chain_id_from_index(ChainIndex::SOL).is_err());
+        assert!(chain_id_from_index(ChainIndex::TRON).is_err());
+    }
+
+    #[test]
+    fn compute_price_impact_is_zero_on_missing_output() {
+        assert_eq!(compute_price_impact("100", "0"), "100.0000");
+        assert_eq!(compute_price_impact("0", "0"), "0");
     }
 }

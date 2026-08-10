@@ -13,6 +13,7 @@ wallet-domain = { workspace = true }
 wallet-error = { workspace = true }
 wallet-proto = { workspace = true }
 salvo = { workspace = true }
+wallet-gateway = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
 clap = { workspace = true }

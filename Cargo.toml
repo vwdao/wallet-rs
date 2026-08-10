@@ -10,6 +10,7 @@ members = [
     "crates/wallet-events",
     "crates/wallet-domain",
     "crates/wallet-test-support",
+    "crates/wallet-gateway",
     "bins/wallet-api",
     "bins/wallet-apigw-app",
     "bins/wallet-apigw-admin",
@@ -35,6 +36,7 @@ wallet-db = { path = "crates/wallet-db" }
 wallet-events = { path = "crates/wallet-events" }
 wallet-domain = { path = "crates/wallet-domain" }
 wallet-test-support = { path = "crates/wallet-test-support" }
+wallet-gateway = { path = "crates/wallet-gateway" }
 
 anyhow = "1"
 async-trait = "0.1"

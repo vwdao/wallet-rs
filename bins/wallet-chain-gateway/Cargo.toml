@@ -10,6 +10,8 @@ path = "src/main.rs"
 [dependencies]
 wallet-config = { workspace = true }
 wallet-error = { workspace = true }
+wallet-types = { workspace = true }
+wallet-gateway = { workspace = true }
 wallet-db = { workspace = true }
 salvo = { workspace = true, features = ["serve-static"] }
 rust-embed = "8"

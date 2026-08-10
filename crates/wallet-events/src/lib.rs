@@ -47,10 +47,16 @@ impl MemoryEventBus {
 #[async_trait]
 impl EventBus for MemoryEventBus {
     async fn publish(&self, subject: &str, payload: serde_json::Value) -> AppResult<()> {
-        let _ = self.tx.send(EventEnvelope {
-            subject: subject.to_string(),
-            payload,
-        });
+        if self
+            .tx
+            .send(EventEnvelope {
+                subject: subject.to_string(),
+                payload,
+            })
+            .is_err()
+        {
+            tracing::debug!(subject, "memory event bus has no active subscribers");
+        }
         Ok(())
     }
 
@@ -173,19 +179,30 @@ impl EventSubscription for NatsSub {
             .await
             .map_err(|e| AppError::Unavailable(e.to_string()))?;
         use futures::StreamExt;
-        if let Some(msg) = messages.next().await {
+        // Skip malformed payloads (ack them to avoid infinite redelivery) but
+        // surface the first parseable envelope.
+        while let Some(msg) = messages.next().await {
             let msg = msg.map_err(|e| AppError::Unavailable(e.to_string()))?;
-            let payload: serde_json::Value =
-                serde_json::from_slice(&msg.payload).unwrap_or(serde_json::Value::Null);
-            let env = EventEnvelope {
-                subject: msg.subject.to_string(),
-                payload,
-            };
-            self.last_msg = Some(msg);
-            Ok(Some(env))
-        } else {
-            Ok(None)
+            match serde_json::from_slice::<serde_json::Value>(&msg.payload) {
+                Ok(payload) => {
+                    let env = EventEnvelope {
+                        subject: msg.subject.to_string(),
+                        payload,
+                    };
+                    self.last_msg = Some(msg);
+                    return Ok(Some(env));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        subject = %msg.subject,
+                        error = %e,
+                        "dropping malformed event payload"
+                    );
+                    msg.ack().await.ok();
+                }
+            }
         }
+        Ok(None)
     }
 
     async fn ack_last(&mut self) -> AppResult<()> {

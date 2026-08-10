@@ -26,7 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let cfg: SyncConfig = load_yaml(&args.config)?;
     let db = Db::connect(&cfg.database).await?;
-    let _ = db.migrate().await;
+    if let Err(e) = db.migrate().await {
+        tracing::warn!("schema push skipped: {e}");
+    }
     let registry = build_registry(std::slice::from_ref(&cfg.chain))?;
     let events = match NatsEventBus::connect(&cfg.nats.url).await {
         Ok(b) => b as Arc<dyn wallet_events::EventBus>,

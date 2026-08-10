@@ -4,35 +4,13 @@ mod subscriber;
 
 use clap::Parser;
 use salvo::prelude::*;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 use wallet_config::{load_yaml, WsConfig};
 use wallet_events::{MemoryEventBus, NatsEventBus};
+use wallet_gateway::{serve, StateInjector};
 
 use crate::hub::Hub;
-
-mod state_injector {
-    use super::*;
-
-    pub struct StateInjector<T: Clone + Send + Sync + 'static>(pub T);
-
-    #[async_trait]
-    impl<T: Clone + Send + Sync + 'static> Handler for StateInjector<T> {
-        async fn handle(
-            &self,
-            _req: &mut Request,
-            depot: &mut Depot,
-            _res: &mut Response,
-            flow: &mut FlowCtrl,
-        ) {
-            depot.insert_typed(self.0.clone());
-            flow.call_next(_req, depot, _res).await;
-        }
-    }
-}
-
-use state_injector::StateInjector;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -59,18 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .push(Router::with_path("ws").get(handler::ws_upgrade))
         .hoop(StateInjector(hub));
 
-    let addr: SocketAddr = cfg.listen.parse()?;
-    tracing::info!("wallet-ws on {addr}");
-    let listener = TcpListener::new(addr.to_string()).bind().await;
-    let server = Server::new(listener);
-    let handle = server.handle();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        tracing::info!("shutting down wallet-ws...");
-        handle.stop_graceful(Some(std::time::Duration::from_secs(10)));
-    });
-    server.serve(app).await;
-    Ok(())
+    serve(app, &cfg.listen, "wallet-ws", std::time::Duration::from_secs(10)).await
 }
 
 #[handler]

@@ -50,14 +50,20 @@ pub async fn require_admin_jwt(
         }
     };
 
+    let secret = match st.cfg.jwt.secret() {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(error = %e, "jwt secret not configured");
+            res.render(AppError::internal("server misconfigured"));
+            flow.skip_rest();
+            return;
+        }
+    };
+
     let mut validation = Validation::default();
     validation.set_issuer(&[st.cfg.jwt.issuer.as_str()]);
-    let data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(st.cfg.jwt.secret.as_bytes()),
-        &validation,
-    )
-    .map_err(|_| AppError::Unauthorized);
+    let data = decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation)
+        .map_err(|_| AppError::Unauthorized);
 
     match data {
         Ok(d) => {

@@ -10,7 +10,7 @@ clickhouse:
   url: "http://127.0.0.1:8123"
   database: "wallet"
 jwt:
-  secret: "dev-secret-change-me"
+  # Set JWT_SECRET env var in production; local dev falls back to jwt.secret.
   issuer: "viva-wallet"
 chains:
   - chain_index: 60

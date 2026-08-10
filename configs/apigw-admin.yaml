@@ -1,6 +1,7 @@
 listen: "0.0.0.0:8081"
 grpc_endpoint: "http://127.0.0.1:9000"
 jwt:
-  secret: "dev-admin-secret-change-me"
+  # Set ADMIN_JWT_SECRET env var in production; local dev falls back to jwt.secret.
+  env_key: "ADMIN_JWT_SECRET"
   issuer: "viva-wallet-admin"
 allowed_origins: []

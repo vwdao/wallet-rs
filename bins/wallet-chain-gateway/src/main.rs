@@ -4,13 +4,13 @@ use rust_embed::RustEmbed;
 use salvo::prelude::*;
 use salvo::serve_static::static_embed;
 use serde_json::Value;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tracing_subscriber::EnvFilter;
 use wallet_config::{load_yaml, ChainGatewayConfig};
 use wallet_db::Db;
 use wallet_error::AppError;
+use wallet_gateway::{serve, StateInjector};
 
 mod admin;
 mod free_rpc;
@@ -21,7 +21,6 @@ mod proxy;
 mod proxy_ws;
 mod router;
 mod settings;
-mod state_injector;
 mod stats;
 mod transports;
 
@@ -30,7 +29,6 @@ mod transports;
 struct AdminAssets;
 
 use settings::SettingsHandle;
-use state_injector::StateInjector;
 
 #[derive(Clone)]
 pub struct Gw {
@@ -59,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
     let args = Args::parse();
     let cfg: ChainGatewayConfig = load_yaml(&args.config)?;
+
     let db = Db::connect(&cfg.database).await?;
     let http = build_http_client();
 
@@ -81,9 +80,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         router: router.clone(),
         stats: stats_collector,
         rate: Arc::new(DashMap::new()),
-        admin_key: cfg.admin_key.clone(),
-        admin_username: cfg.admin_username.clone(),
-        admin_password: cfg.admin_password.clone(),
+        admin_key: env_secret("GATEWAY_ADMIN_KEY", cfg.admin_key.as_deref()),
+        admin_username: std::env::var("GATEWAY_ADMIN_USERNAME")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or(cfg.admin_username.clone()),
+        admin_password: env_secret("GATEWAY_ADMIN_PASSWORD", cfg.admin_password.as_deref()),
         settings: settings_handle.clone(),
     };
 
@@ -96,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     health_checker.spawn();
 
     if let Some(grpc_listen) = cfg.grpc_listen.clone().filter(|s| !s.is_empty()) {
-        match grpc_listen.parse::<SocketAddr>() {
+        match grpc_listen.parse::<std::net::SocketAddr>() {
             Ok(addr) => grpc_proxy::spawn(state.clone(), addr),
             Err(e) => tracing::error!("invalid grpc_listen {grpc_listen}: {e}"),
         }
@@ -169,18 +171,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .hoop(StateInjector(state)),
         );
 
-    let addr: SocketAddr = cfg.listen.parse()?;
-    tracing::info!("chain-gateway on {addr}");
-    let listener = TcpListener::new(addr.to_string()).bind().await;
-    let server = Server::new(listener);
-    let handle = server.handle();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        tracing::info!("shutting down chain-gateway...");
-        handle.stop_graceful(Some(std::time::Duration::from_secs(30)));
-    });
-    server.serve(app).await;
-    Ok(())
+    serve(
+        app,
+        &cfg.listen,
+        "chain-gateway",
+        std::time::Duration::from_secs(30),
+    )
+    .await
 }
 
 #[handler]
@@ -302,6 +299,14 @@ fn build_http_client() -> reqwest::Client {
         .no_proxy()
         .build()
         .expect("failed to build HTTP client")
+}
+
+/// Resolve a secret: prefer a non-empty env var, fall back to the YAML value.
+fn env_secret(key: &str, yaml: Option<&str>) -> Option<String> {
+    std::env::var(key)
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| yaml.filter(|s| !s.is_empty()).map(String::from))
 }
 
 fn client_ip_of(req: &Request) -> Option<String> {

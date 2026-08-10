@@ -59,7 +59,17 @@ pub async fn require_app_jwt(
         }
     };
 
-    if verify_jwt(token, &st.cfg.jwt.secret, &st.cfg.jwt.issuer).is_err() {
+    let secret = match st.cfg.jwt.secret() {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::error!(error = %e, "jwt secret not configured");
+            res.render(AppError::internal("server misconfigured"));
+            flow.skip_rest();
+            return;
+        }
+    };
+
+    if verify_jwt(token, &secret, &st.cfg.jwt.issuer).is_err() {
         res.render(AppError::Unauthorized);
         flow.skip_rest();
         return;

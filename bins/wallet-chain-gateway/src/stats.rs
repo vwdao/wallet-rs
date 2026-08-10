@@ -85,8 +85,10 @@ impl StatsWorker {
         let events: Vec<StatsEvent> = buffer.drain(..).collect();
         let count = events.len();
 
+        // Reuse a single connection for the whole batch instead of opening one
+        // per row.
+        let mut db = self.db.clone_inner();
         for event in &events {
-            let mut db = self.db.clone_inner();
             let _ = toasty::create!(wallet_db::ChainGatewayStats {
                 api_key: &event.api_key,
                 chain_index: event.chain_index,

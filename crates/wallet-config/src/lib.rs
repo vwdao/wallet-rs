@@ -11,6 +11,8 @@ pub enum ConfigError {
     Io(#[from] std::io::Error),
     #[error("yaml: {0}")]
     Yaml(#[from] serde_yaml::Error),
+    #[error("missing required secret: {0}")]
+    MissingSecret(String),
 }
 
 pub fn load_yaml<T: for<'de> Deserialize<'de>>(path: impl AsRef<Path>) -> Result<T, ConfigError> {
@@ -77,9 +79,30 @@ fn default_confirmations() -> u64 {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct JwtConfig {
-    pub secret: String,
+    /// Optional JWT secret from YAML. Prefer the env var named by `env_key`
+    /// (default `JWT_SECRET`); see [`JwtConfig::secret`].
+    #[serde(default)]
+    secret: Option<String>,
+    /// Env var name that overrides `secret` (default `JWT_SECRET`).
+    #[serde(default)]
+    env_key: Option<String>,
     #[serde(default = "default_issuer")]
     pub issuer: String,
+}
+
+impl JwtConfig {
+    /// JWT signing/verification secret. Prefers the env var named by `env_key`
+    /// (default `JWT_SECRET`), then the YAML value. Errors when neither is set
+    /// so a missing secret can never silently weaken to a known default.
+    pub fn secret(&self) -> Result<String, ConfigError> {
+        let key = self.env_key.as_deref().unwrap_or("JWT_SECRET");
+        match std::env::var(key) {
+            Ok(s) if !s.trim().is_empty() => Ok(s),
+            _ => self.secret.clone().ok_or_else(|| {
+                ConfigError::MissingSecret(format!("{key} env or jwt.secret yaml key"))
+            }),
+        }
+    }
 }
 
 fn default_issuer() -> String {

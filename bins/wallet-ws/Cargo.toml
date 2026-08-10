@@ -12,6 +12,7 @@ wallet-config = { workspace = true }
 wallet-error = { workspace = true }
 wallet-events = { workspace = true }
 salvo = { workspace = true }
+wallet-gateway = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
 clap = { workspace = true }

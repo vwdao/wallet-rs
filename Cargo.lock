@@ -6266,6 +6266,7 @@ dependencies = [
  "tracing-subscriber",
  "wallet-config",
  "wallet-error",
+ "wallet-gateway",
  "wallet-proto",
 ]
 
@@ -6286,6 +6287,7 @@ dependencies = [
  "wallet-config",
  "wallet-domain",
  "wallet-error",
+ "wallet-gateway",
  "wallet-proto",
 ]
 
@@ -6357,6 +6359,8 @@ dependencies = [
  "wallet-config",
  "wallet-db",
  "wallet-error",
+ "wallet-gateway",
+ "wallet-types",
 ]
 
 [[package]]
@@ -6444,6 +6448,18 @@ dependencies = [
  "tokio",
  "tracing",
  "wallet-error",
+]
+
+[[package]]
+name = "wallet-gateway"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "salvo",
+ "serde",
+ "tokio",
+ "tracing",
+ "wallet-proto",
 ]
 
 [[package]]
@@ -6546,6 +6562,7 @@ dependencies = [
  "wallet-config",
  "wallet-error",
  "wallet-events",
+ "wallet-gateway",
 ]
 
 [[package]]
