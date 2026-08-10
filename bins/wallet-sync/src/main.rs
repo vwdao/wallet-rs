@@ -29,6 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = db.migrate().await {
         tracing::warn!("schema push skipped: {e}");
     }
+    let redis = wallet_db::RedisStore::connect(&cfg.redis).await?;
     let registry = build_registry(std::slice::from_ref(&cfg.chain))?;
     let events = match NatsEventBus::connect(&cfg.nats.url).await {
         Ok(b) => b as Arc<dyn wallet_events::EventBus>,
@@ -37,15 +38,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             MemoryEventBus::new(256)
         }
     };
-    let chain_index = ChainIndex(cfg.chain_index);
+    let chain_index = ChainIndex(cfg.chain.chain_index);
     let handle = registry.get(chain_index)?.clone();
     let handle_for_reindex = handle.clone();
     let events_for_reindex = events.clone();
     let db_for_reindex = db.clone();
+    let redis_for_reindex = redis.clone();
 
     tokio::select! {
         r = syncer::run(syncer::SyncRuntime {
             db,
+            redis,
             chain_index,
             chain: handle,
             events,
@@ -54,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             start_height: cfg.start_height,
             block_fetch_concurrency: cfg.block_fetch_concurrency,
         }) => { r?; }
-        r = reindex::start(db_for_reindex, chain_index, Arc::new(handle_for_reindex), events_for_reindex) => { r?; }
+        r = reindex::start(db_for_reindex, redis_for_reindex, chain_index, Arc::new(handle_for_reindex), events_for_reindex) => { r?; }
         _ = tokio::signal::ctrl_c() => {
             tracing::info!("shutting down wallet-sync...");
         }

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use tracing::{error, info};
 use wallet_chain::{BlockSource, ChainHandle};
-use wallet_db::{Db, SyncCursorRepo, TransactionRepo};
+use wallet_db::{Db, RedisStore, TransactionRepo};
 use wallet_error::AppResult;
 use wallet_events::EventBus;
 use wallet_types::ChainIndex;
@@ -13,6 +13,7 @@ use crate::reporter::report_txs;
 
 pub async fn start(
     db: Db,
+    redis: RedisStore,
     chain_index: ChainIndex,
     chain: Arc<ChainHandle>,
     bus: Arc<dyn EventBus>,
@@ -85,7 +86,7 @@ pub async fn start(
                 }
 
                 // Update sync cursor to the reindexed range
-                if let Err(e) = SyncCursorRepo::new(&db).set(chain_index, to_block).await {
+                if let Err(e) = redis.cursor_set(chain_index, to_block).await {
                     error!(error = %e, "reindex: cursor update failed");
                 }
 

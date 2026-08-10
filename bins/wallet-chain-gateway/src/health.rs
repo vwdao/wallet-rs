@@ -2,6 +2,7 @@ use std::time::Duration;
 use wallet_db::RpcEndpoint;
 use wallet_error::AppResult;
 
+use crate::protocol::EndpointProtocol;
 use crate::settings::SettingsHandle;
 use crate::transports;
 
@@ -136,6 +137,27 @@ impl HealthChecker {
             let result =
                 transports::probe(&self.http, &ep.url, protocol, &headers, probe_method, family)
                     .await;
+
+            // A healthy endpoint must report a usable block height. A probe that
+            // "succeeds" with a `null`/unparseable result means the endpoint is
+            // not actually serving the chain (e.g. a lagging/broken node that
+            // answers `eth_blockNumber` with `null`); treat it as a probe
+            // failure so it accumulates error_count and is eventually marked
+            // unhealthy instead of staying in rotation with a cleared height.
+            // gRPC is the exception: its probe is connectivity-only.
+            let result = match result {
+                Ok((_latency, None)) if !matches!(protocol, Some(EndpointProtocol::Grpc)) => {
+                    tracing::warn!(
+                        endpoint = %ep.url,
+                        chain = ep.chain_index,
+                        "probe returned no block height, counting as failure"
+                    );
+                    Err(wallet_error::AppError::Unavailable(
+                        "probe returned no block height".into(),
+                    ))
+                }
+                other => other,
+            };
 
             let mut db = self.db.clone_inner();
             match result {

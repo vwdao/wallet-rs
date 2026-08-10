@@ -8,6 +8,7 @@ wallet-types = { workspace = true }
 wallet-error = { workspace = true }
 wallet-config = { workspace = true }
 toasty = { workspace = true }
+fred = { workspace = true }
 clickhouse = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

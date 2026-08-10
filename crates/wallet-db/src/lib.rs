@@ -1,10 +1,12 @@
 pub mod clickhouse;
 pub mod models;
 pub mod pool;
+pub mod redis;
 pub mod repo;
 
 pub use models::*;
 pub use pool::Db;
+pub use redis::*;
 pub use repo::*;
 
 pub type UserRow = User;

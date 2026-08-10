@@ -12,9 +12,10 @@ redis:
 nats:
   url: "nats://127.0.0.1:4222"
 chain:
-  chain_index: 195
-  family: tron
+  chain_index: 10042221
+  family: evm
+  evm_chain_id: 1
   confirmations: 12
   endpoints:
-    - url: "grpc://127.0.0.1:50051/rpc/tron/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+    - url: "http://127.0.0.1:8545/rpc/arb/gw_5a6ce3f0795246bc9d5b938e5af8a399"
       weight: 1

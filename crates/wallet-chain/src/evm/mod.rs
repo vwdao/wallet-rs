@@ -9,6 +9,7 @@ use rust_decimal::Decimal;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::Duration;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
 use wallet_types::{
@@ -163,9 +164,53 @@ impl BlockSource for EvmChain {
 
     async fn fetch_block_txs(&self, height: u64) -> AppResult<Vec<NormalizedTx>> {
         let block_hex = format!("0x{height:x}");
+        // A gateway that is failing over, or that has a lagging upstream in
+        // rotation, can transiently return `null` for a block that certainly
+        // exists (the tip has long since passed it). Retry with a short
+        // backoff before surfacing the error so a single blip doesn't stall
+        // the whole catch-up sweep.
+        const FETCH_ATTEMPTS: usize = 3;
+        let mut last_err = None;
+        for attempt in 1..=FETCH_ATTEMPTS {
+            match self.fetch_block_once(&block_hex, height).await {
+                Ok(txs) => return Ok(txs),
+                Err(e) if attempt < FETCH_ATTEMPTS => {
+                    tracing::debug!(
+                        height,
+                        attempt,
+                        error = %e,
+                        "transient block fetch failure, retrying"
+                    );
+                    tokio::time::sleep(Duration::from_millis(200 * attempt as u64)).await;
+                }
+                Err(e) => last_err = Some(e),
+            }
+        }
+        Err(last_err.unwrap_or_else(|| {
+            AppError::Unavailable(format!("failed to fetch block at height {height}"))
+        }))
+    }
+}
+
+impl EvmChain {
+    /// Single attempt at fetching a block's normalized transactions.
+    async fn fetch_block_once(
+        &self,
+        block_hex: &str,
+        height: u64,
+    ) -> AppResult<Vec<NormalizedTx>> {
         let result = self
             .rpc("eth_getBlockByNumber", json!([block_hex, true]))
             .await?;
+        // A `null` result (or a payload without a `hash`) means the gateway
+        // could not serve the block at this height — a transient flake, not a
+        // legitimate empty block. Surface it as an error so the caller can
+        // retry instead of skipping the height.
+        if result.is_null() || result.get("hash").and_then(Value::as_str).is_none() {
+            return Err(AppError::Unavailable(format!(
+                "eth_getBlockByNumber returned no block at height {height}"
+            )));
+        }
         let txs = result
             .get("transactions")
             .and_then(|t| t.as_array())
@@ -266,9 +311,7 @@ impl BlockSource for EvmChain {
         }
         Ok(out)
     }
-}
 
-impl EvmChain {
     /// Fetch all receipts for a block. Prefers the batched `eth_getBlockReceipts`
     /// (geth) and falls back to per-transaction receipts on providers without it.
     async fn fetch_block_receipts(&self, block_hex: &str) -> AppResult<Vec<Value>> {

@@ -106,6 +106,55 @@ describe('drawStatsChart', () => {
     expect(hits[0].h).toBeGreaterThan(0)
   })
 
+  it('passes per-bucket method breakdown into the hit payload', () => {
+    const { canvas } = mockCanvas()
+    drawStatsChart(canvas, {
+      bucket_seconds: 60,
+      points: [
+        {
+          ts: 1_700_000_000,
+          success: 5,
+          error: 1,
+          avg_latency_ms: 90,
+          methods: [
+            { method: 'eth_blockNumber', chain_index: 60, total_requests: 4, error_count: 0 },
+            { method: 'eth_getBalance', chain_index: 60, total_requests: 2, error_count: 1 },
+            // missing chain_index 兜底为 0，error_count 兜底为 0
+            { method: 'unknown' },
+          ],
+        },
+      ],
+    })
+    const hits = getChartHits(canvas)
+    expect(hits.length).toBe(1)
+    const methods = hits[0].payload.methods
+    expect(Array.isArray(methods)).toBe(true)
+    expect(methods).toHaveLength(3)
+    expect(methods[0]).toEqual({
+      method: 'eth_blockNumber',
+      chain_index: 60,
+      total_requests: 4,
+      error_count: 0,
+    })
+    expect(methods[1].error_count).toBe(1)
+    expect(methods[2]).toEqual({
+      method: 'unknown',
+      chain_index: 0,
+      total_requests: 0,
+      error_count: 0,
+    })
+  })
+
+  it('emits an empty methods array when no breakdown is provided', () => {
+    const { canvas } = mockCanvas()
+    drawStatsChart(canvas, {
+      bucket_seconds: 60,
+      points: [{ ts: 1_700_000_000, success: 3, error: 1, avg_latency_ms: 125 }],
+    })
+    const hits = getChartHits(canvas)
+    expect(hits[0].payload.methods).toEqual([])
+  })
+
   it('clears hit regions when there is no data', () => {
     const { canvas } = mockCanvas()
     drawStatsChart(canvas, { points: [], bucket_seconds: 60 })

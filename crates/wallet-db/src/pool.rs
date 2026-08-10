@@ -25,7 +25,6 @@ impl Db {
                 models::Token,
                 models::Tx,
                 models::GasPool,
-                models::SyncCursor,
                 models::SyncSetting,
                 models::Dapp,
                 models::SwapProvider,

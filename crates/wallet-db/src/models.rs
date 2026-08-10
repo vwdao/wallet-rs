@@ -176,14 +176,6 @@ pub struct GasPool {
 }
 
 #[derive(Debug, Clone, toasty::Model)]
-pub struct SyncCursor {
-    #[key]
-    pub chain_index: i64,
-
-    pub height: i64,
-}
-
-#[derive(Debug, Clone, toasty::Model)]
 pub struct SyncSetting {
     #[key]
     pub chain_index: i64,

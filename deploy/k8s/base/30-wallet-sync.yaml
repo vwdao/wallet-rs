@@ -17,10 +17,11 @@ metadata:
   namespace: wallet
 data:
   wallet-sync.yaml.tmpl: |
-    chain_index: 60
     poll_interval_ms: 2000
     database:
       url: "postgres://wallet:${POSTGRES_PASSWORD}@postgres:5432/wallet"
+    redis:
+      url: "redis://redis:6379"
     nats:
       url: "nats://nats:4222"
     chain:
@@ -106,10 +107,11 @@ metadata:
   namespace: wallet
 data:
   wallet-sync.yaml.tmpl: |
-    chain_index: 501
     poll_interval_ms: 4000
     database:
       url: "postgres://wallet:${POSTGRES_PASSWORD}@postgres:5432/wallet"
+    redis:
+      url: "redis://redis:6379"
     nats:
       url: "nats://nats:4222"
     chain:
@@ -194,10 +196,11 @@ metadata:
   namespace: wallet
 data:
   wallet-sync.yaml.tmpl: |
-    chain_index: 195
     poll_interval_ms: 3000
     database:
       url: "postgres://wallet:${POSTGRES_PASSWORD}@postgres:5432/wallet"
+    redis:
+      url: "redis://redis:6379"
     nats:
       url: "nats://nats:4222"
     chain:

@@ -1,16 +1,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 use wallet_chain::{BlockSource, ChainHandle};
-use wallet_db::{Db, SyncCursorRepo, SyncSettingRepo, TransactionRepo};
+use wallet_db::{Db, RedisStore, SyncSettingRepo, TransactionRepo};
 use wallet_error::AppResult;
 use wallet_events::EventBus;
-use wallet_types::{ChainFamily, ChainIndex, NormalizedTx};
+use wallet_types::{ChainIndex, NormalizedTx};
 
 use crate::parser::parse_block;
 use crate::reporter::report_txs;
 
 pub struct SyncRuntime {
     pub db: Db,
+    pub redis: RedisStore,
     pub chain_index: ChainIndex,
     pub chain: ChainHandle,
     pub events: Arc<dyn EventBus>,
@@ -80,7 +81,7 @@ async fn tick(
         return Ok((poll_ms, None));
     }
     let safe = tip.saturating_sub(confirmations);
-    let mut cursor = SyncCursorRepo::new(&rt.db).get(rt.chain_index).await?;
+    let mut cursor = rt.redis.cursor_get(rt.chain_index).await?;
 
     if cursor == 0 {
         cursor = match rt.start_height {
@@ -98,11 +99,9 @@ async fn tick(
             "chain reorged, rewinding cursor"
         );
         cursor = safe;
-        SyncCursorRepo::new(&rt.db).set(rt.chain_index, safe).await?;
+        rt.redis.cursor_set(rt.chain_index, safe).await?;
     }
 
-    let family_is_evm =
-        matches!(ChainFamily::for_index(rt.chain_index), Some(ChainFamily::Evm));
     let repo = TransactionRepo::new(&rt.db);
     let mut synced = 0u64;
     let mut last_synced: Option<u64> = None;
@@ -111,9 +110,12 @@ async fn tick(
     while cursor < safe {
         // Fetch a window of up to `concurrency` blocks in parallel. We
         // process the results back in height order so the cursor advances
-        // monotonically; if any block in the window fails to fetch (or
-        // returns zero txs on an EVM chain — a gateway flake), we stop
+        // monotonically; if any block in the window fails to fetch, we stop
         // the batch and let the next tick retry from the failing height.
+        // Empty tx lists are *not* treated as failures: high-BPS chains
+        // (Arbitrum, Base, OP, Polygon) emit legitimate empty blocks, and
+        // genuine gateway flakes already surface as `Err` from the chain
+        // implementation (e.g. a missing block).
         let batch_end = std::cmp::min(safe, cursor + concurrency as u64);
         let heights: Vec<u64> = (cursor + 1..=batch_end).collect();
         let fetches = fetch_window(&rt.chain, &heights).await;
@@ -131,13 +133,6 @@ async fn tick(
                     break;
                 }
             };
-            // A genuine EVM block always carries at least one transaction, so
-            // an empty result means the gateway/RPC flaked. Hold the cursor
-            // and retry on the next tick instead of permanently skipping.
-            if raw_txs.is_empty() && family_is_evm {
-                tracing::warn!(chain = %rt.chain_index, height, "block returned zero txs (gateway flake?), holding cursor for retry");
-                break;
-            }
             let normalized = parse_block(rt.chain_index, height, raw_txs);
             // Persist and publish concurrently: the DB write is bounded by
             // the batched UPSERT, the event publish is bounded by
@@ -163,7 +158,7 @@ async fn tick(
     if synced > 0 {
         // Single cursor write at the end of a catch-up sweep instead of one
         // per block; the worst case (single-block tick) still does one write.
-        SyncCursorRepo::new(&rt.db).set(rt.chain_index, cursor).await?;
+        rt.redis.cursor_set(rt.chain_index, cursor).await?;
         tracing::info!(chain = %rt.chain_index, tip, safe, synced, "sync catch-up complete");
     }
     Ok((poll_ms, last_synced))

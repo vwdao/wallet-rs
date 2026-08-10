@@ -99,6 +99,14 @@ export function drawStatsChart(canvas, data, visibility = {}) {
 
   const hits = points.map((point, index) => {
     const half = slot / 2
+    const methods = Array.isArray(point.methods)
+      ? point.methods.map((item) => ({
+          method: String(item.method || '未知'),
+          chain_index: Number(item.chain_index || 0),
+          total_requests: Number(item.total_requests || 0),
+          error_count: Number(item.error_count || 0),
+        }))
+      : []
     return {
       x: x(index) - half,
       y: padding.top,
@@ -109,6 +117,7 @@ export function drawStatsChart(canvas, data, visibility = {}) {
         success: Number(point.success || 0),
         error: Number(point.error || 0),
         avg_latency_ms: Number(point.avg_latency_ms || 0),
+        methods,
       },
     }
   })

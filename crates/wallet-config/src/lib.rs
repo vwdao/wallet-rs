@@ -133,8 +133,8 @@ pub struct GatewayConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct SyncConfig {
-    pub chain_index: i64,
     pub database: DatabaseConfig,
+    pub redis: RedisConfig,
     pub nats: NatsConfig,
     pub chain: ChainRuntimeConfig,
     #[serde(default = "default_poll_ms")]

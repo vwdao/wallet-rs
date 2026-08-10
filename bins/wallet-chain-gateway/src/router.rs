@@ -208,6 +208,16 @@ impl RpcRouter {
                 if !self.is_tier_allowed(&ep.tier, user_tier) {
                     return false;
                 }
+                // An endpoint that has never reported a usable block height
+                // can't prove it is serving the chain (e.g. one answering
+                // `eth_blockNumber` with `null`). Once at least one endpoint
+                // for the chain has a known height, drop the unknown-height
+                // ones from rotation so a fast-but-broken endpoint doesn't win
+                // weighted selection. gRPC probes are connectivity-only, so
+                // this only applies when the chain has a height-reporting peer.
+                if let (Some(_), None) = (max_height, ep.block_height) {
+                    return false;
+                }
                 if let (Some(mh), Some(eh)) = (max_height, ep.block_height) {
                     if mh.saturating_sub(eh) > max_block_lag {
                         return false;
