@@ -1,0 +1,27 @@
+poll_interval_ms: 5000
+# start_height: 0  # optional backfill start (first checkpoint sequence number to sync on a fresh DB)
+# How many checkpoints to fetch from the RPC in parallel per tick. Sui
+# fullnodes are generally less loaded than EVM RPCs, but the gateway's
+# `queryTransactionBlocks` paginates with `limit=50` so a moderate
+# concurrency keeps the in-flight queue tight without throttling.
+block_fetch_concurrency: 4
+database:
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+redis:
+  url: "redis://127.0.0.1:6379"
+nats:
+  url: "nats://127.0.0.1:4222"
+chain:
+  chain_index: 784
+  family: sui
+  # Sui checkpoints are produced every ~3s. A checkpoint is considered
+  # final once a checkpoint cert is formed, which takes ~50 checkpoints
+  # (~3 minutes) on mainnet; 50 mirrors that so wallet-sync only writes
+  # confirmed transactions.
+  confirmations: 50
+  endpoints:
+    # chain-gateway routes `/rpc/sui/...` to Sui fullnodes (see
+    # `wallet-chain-gateway` configs). The default `gw_xxx` token is the
+    # gateway-issued tenant id; rotate in production.
+    - url: "http://127.0.0.1:8545/rpc/sui/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+      weight: 1

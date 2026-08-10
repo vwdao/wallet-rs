@@ -68,6 +68,8 @@ pub struct ChainRuntimeConfig {
     pub family: String,
     #[serde(default)]
     pub evm_chain_id: Option<u64>,
+    #[serde(default)]
+    pub ton_api_version: Option<u32>, // TON API version: 2, 3, or 4
     pub endpoints: Vec<RpcEndpoint>,
     #[serde(default = "default_confirmations")]
     pub confirmations: u64,
@@ -215,4 +217,41 @@ fn default_stats_batch_interval_ms() -> u64 {
 pub struct WebhookConfig {
     pub listen: String,
     pub nats: NatsConfig,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Validate that the in-repo per-chain sync configs deserialize into
+    /// `SyncConfig` and have the expected chain_index / family. This catches
+    /// schema drift (e.g. a renamed field) before `wallet-sync` boots with
+    /// a broken config.
+    #[test]
+    fn sync_configs_deserialize() {
+        let ton: SyncConfig = load_yaml("../../configs/wallet-sync-ton.yaml")
+            .expect("wallet-sync-ton.yaml must deserialize");
+        assert_eq!(ton.chain.chain_index, 607);
+        assert_eq!(ton.chain.family, "ton");
+        assert_eq!(ton.chain.confirmations, 5);
+        assert!(!ton.chain.endpoints.is_empty());
+        assert_eq!(ton.poll_interval_ms, 5000);
+        assert!(ton.start_height.is_none());
+
+        let sui: SyncConfig = load_yaml("../../configs/wallet-sync-sui.yaml")
+            .expect("wallet-sync-sui.yaml must deserialize");
+        assert_eq!(sui.chain.chain_index, 784);
+        assert_eq!(sui.chain.family, "sui");
+        assert_eq!(sui.chain.confirmations, 50);
+        assert!(!sui.chain.endpoints.is_empty());
+        assert_eq!(sui.poll_interval_ms, 5000);
+
+        // Regression guard: TRON config must keep chain_index 195 + family
+        // "tron" so the existing wallet-sync-tron deployment isn't broken
+        // by the TON/Sui addition.
+        let tron: SyncConfig = load_yaml("../../configs/wallet-sync-tron.yaml")
+            .expect("wallet-sync-tron.yaml must deserialize");
+        assert_eq!(tron.chain.chain_index, 195);
+        assert_eq!(tron.chain.family, "tron");
+    }
 }

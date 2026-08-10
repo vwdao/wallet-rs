@@ -1,0 +1,33 @@
+poll_interval_ms: 5000
+# start_height: 0  # optional backfill start (first masterchain seqno to sync on a fresh DB)
+# How many masterchain blocks to fetch from the RPC in parallel per tick.
+# Each height now costs several RPCs (lookupBlock + shards + paginated
+# getBlockTransactionsExt per shard). ZAN/toncenter public tiers rate-limit
+# hard around a few RPS, so keep this at 1-2 for a single endpoint.
+block_fetch_concurrency: 1
+database:
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+redis:
+  url: "redis://127.0.0.1:6379"
+nats:
+  url: "nats://127.0.0.1:4222"
+chain:
+  chain_index: 607
+  family: ton
+  # TON API version: 2, 3, or 4
+  # Must match the endpoint path. This ZAN URL is toncenter v2 JSON-RPC
+  # compatible (`/api/v2/jsonRPC`); wallet-chain uses getBlockTransactionsExt
+  # + shards against it.
+  # v2: https://toncenter.com/api/v2/jsonRPC
+  # v3: https://toncenter.com/api/v3/... (indexed REST; different shape)
+  ton_api_version: 2
+  # Masterchain block finality is reached after ~5 masterchain blocks
+  # (~25s on TON mainnet). Setting confirmations slightly higher absorbs
+  # the round-trip to the chain-gateway without slowing down syncing.
+  confirmations: 5
+  endpoints:
+    # chain-gateway routes `/rpc/ton/...` to TON JSON-RPC endpoints (see
+    # `wallet-chain-gateway` configs). The default `gw_xxx` token is the
+    # gateway-issued tenant id; rotate in production.
+    - url: "https://api.zan.top/node/v1/ton/mainnet/b49c38feccc54a49a318db163d336c60/api/v2/jsonRPC"
+      weight: 1

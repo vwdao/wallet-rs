@@ -1,0 +1,28 @@
+# TON wallet sync config using v2 API (public, limited features)
+# Use this when connecting to toncenter public RPC or other v2-compatible endpoints
+
+poll_interval_ms: 5000
+block_fetch_concurrency: 4
+
+database:
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+
+redis:
+  url: "redis://127.0.0.1:6379"
+
+nats:
+  url: "nats://127.0.0.1:4222"
+
+chain:
+  chain_index: 607
+  family: ton
+  # TON API version: 2, 3, or 4
+  # v2: https://toncenter.com/api/v2/jsonRPC (public, limited transaction data)
+  # v3: https://toncenter.com/api/v3/jsonRPC (paid, full transaction data)
+  # v4: future version (current development)
+  ton_api_version: 2
+  confirmations: 5
+
+  endpoints:
+    - url: "https://toncenter.com/api/v2/jsonRPC"
+      weight: 1

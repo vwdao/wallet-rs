@@ -25,6 +25,10 @@ impl ChainIndex {
     pub const ZCASH: Self = Self(133);
     pub const HYPERLIQUID: Self = Self(10000999);
     pub const ROBINHOOD: Self = Self(10004663);
+    /// TON (The Open Network), SLIP-0044 coin type `607`.
+    pub const TON: Self = Self(607);
+    /// Sui, SLIP-0044 coin type `784`.
+    pub const SUI: Self = Self(784);
 
     pub fn as_i64(self) -> i64 {
         self.0
@@ -45,6 +49,10 @@ pub enum ChainFamily {
     Bitcoin,
     Tron,
     UtxoOther,
+    /// TON (The Open Network). JSON-RPC uses the v3 API shape.
+    Ton,
+    /// Sui. JSON-RPC uses the Sui JSON-RPC shape.
+    Sui,
 }
 
 impl ChainFamily {
@@ -63,6 +71,8 @@ impl ChainFamily {
             ChainIndex::BTC => Some(Self::Bitcoin),
             ChainIndex::DOGE | ChainIndex::ZCASH => Some(Self::UtxoOther),
             ChainIndex::TRON => Some(Self::Tron),
+            ChainIndex::TON => Some(Self::Ton),
+            ChainIndex::SUI => Some(Self::Sui),
             _ => None,
         }
     }
@@ -76,12 +86,14 @@ impl ChainFamily {
             Self::Solana => "solana",
             Self::Bitcoin | Self::UtxoOther => "bitcoin",
             Self::Tron => "tron",
+            Self::Ton => "ton",
+            Self::Sui => "sui",
         }
     }
 }
 
 /// Opaque chain address (hex / base58 / bech32 string).
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Address(pub String);
 
@@ -192,19 +204,46 @@ pub struct NormalizedTx {
     pub method: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GasEstimateRequest {
     pub from: Address,
     pub to: Option<Address>,
     pub data: Option<Vec<u8>>,
     pub value: Option<Amount>,
+    /// Family-specific extensions. The shape is family-defined:
+    ///
+    /// - `sui`: `{"txBytes": "<base64>", "signatures": ["<base64>", ...]}`
+    ///   — required for `suix_dryRunTransactionBlock` (a fully-formed
+    ///   transaction block, not just a payload).
+    /// - `ton`: `{"messageBoc": "<base64>"}` — the message BOC to estimate
+    ///   fees for. When omitted, the estimator falls back to a heuristic
+    ///   from the wallet address alone.
+    /// - `evm`/`bitcoin`/`solana`/`tron`: ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct GasEstimate {
     pub gas_limit: u64,
     pub max_fee_per_gas: Option<u128>,
     pub max_priority_fee_per_gas: Option<u128>,
+    /// Reference gas price (lowest unit, e.g. MIST on Sui, nanoTON on TON).
+    /// For EVM, this is `max_fee_per_gas` in wei; on Sui it is the
+    /// `suix_getReferenceGasPrice` value; on TON it is the workchain
+    /// `gas_price` from `getConfigParam 18`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gas_price: Option<u128>,
+    /// Total estimated fee in the chain's lowest unit. On Sui this is
+    /// `computationCost + storageCost - storageRebate`; on TON this is the
+    /// `runGetMethod`/config-derivation result in nanotons.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fee_native: Option<u128>,
+    /// Number of gas units the execution is expected to consume (Sui
+    /// computation units, or TON message-gas units). EVM uses
+    /// `gas_limit` instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gas_used: Option<u64>,
 }
 
 #[derive(Debug, Clone, thiserror::Error)]

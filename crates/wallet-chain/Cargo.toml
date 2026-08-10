@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-default = ["evm", "solana", "bitcoin", "tron"]
+default = ["evm", "solana", "bitcoin", "tron", "ton", "sui"]
 evm = []
 solana = []
 bitcoin = []
+ton = []
+sui = []
 tron = [
     "dep:tonic",
     "dep:http",
@@ -18,7 +20,7 @@ tron = [
     "dep:tron-rs",
     "dep:sha2",
 ]
-full = ["evm", "solana", "bitcoin", "tron"]
+full = ["evm", "solana", "bitcoin", "ton", "sui", "tron"]
 
 [dependencies]
 wallet-types = { workspace = true }

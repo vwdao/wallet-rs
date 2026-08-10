@@ -1,7 +1,7 @@
 use crate::traits::{
     BalanceReader, BlockSource, GasEstimator, NonceProvider, TokenBalance, TxBroadcaster,
 };
-use crate::{bitcoin, evm, solana, tron};
+use crate::{bitcoin, evm, solana, sui, ton, tron};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +20,10 @@ pub enum ChainHandle {
     Bitcoin(Arc<bitcoin::BitcoinChain>),
     #[cfg(feature = "tron")]
     Tron(Arc<tron::TronChain>),
+    #[cfg(feature = "ton")]
+    Ton(Arc<ton::TonChain>),
+    #[cfg(feature = "sui")]
+    Sui(Arc<sui::SuiChain>),
 }
 
 impl ChainHandle {
@@ -33,6 +37,10 @@ impl ChainHandle {
             Self::Bitcoin(c) => c.pool.next_url().map(|u| u.to_string()),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.pool.next_url().map(|u| u.to_string()),
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.pool.next_url().map(|u| u.to_string()),
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.pool.next_url().map(|u| u.to_string()),
         }
     }
 
@@ -46,6 +54,10 @@ impl ChainHandle {
             Self::Bitcoin(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.as_ref(),
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.as_ref(),
         }
     }
 
@@ -59,6 +71,10 @@ impl ChainHandle {
             Self::Bitcoin(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.as_ref(),
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.as_ref(),
         }
     }
 
@@ -72,6 +88,10 @@ impl ChainHandle {
             Self::Bitcoin(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.as_ref(),
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.as_ref(),
         }
     }
 
@@ -85,6 +105,10 @@ impl ChainHandle {
             Self::Bitcoin(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.as_ref(),
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.as_ref(),
         }
     }
 
@@ -132,6 +156,10 @@ impl TokenBalance for ChainHandle {
             Self::Bitcoin(_) => Err(AppError::Unimplemented("bitcoin token balance".into())),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.token_balance(wallet, token).await,
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.token_balance(wallet, token).await,
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.token_balance(wallet, token).await,
         }
     }
 }
@@ -160,6 +188,13 @@ impl GasEstimator for ChainHandle {
         match self {
             #[cfg(feature = "evm")]
             Self::Evm(c) => c.estimate_gas(tx).await,
+            // TON: masterchain gas price × message-size heuristic; see
+            // `TonChain::estimate_gas` for the BOC path.
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.estimate_gas(tx).await,
+            // Sui: dry-run the signed transaction block.
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.estimate_gas(tx).await,
             _ => Err(AppError::Unimplemented("estimate_gas".into())),
         }
     }

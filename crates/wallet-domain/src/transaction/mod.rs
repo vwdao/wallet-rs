@@ -51,6 +51,7 @@ impl<'a> TransactionService<'a> {
             to,
             data,
             value,
+            extras: None,
         };
         self.state.chains.get(chain_index)?.estimate_gas(&req).await
     }

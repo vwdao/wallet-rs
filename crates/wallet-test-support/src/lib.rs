@@ -13,6 +13,7 @@ pub fn sample_evm_config() -> ChainRuntimeConfig {
         chain_index: 60,
         family: "evm".into(),
         evm_chain_id: Some(1),
+        ton_api_version: None,
         endpoints: vec![RpcEndpoint {
             url: "https://eth.llamarpc.com".into(),
             weight: 1,

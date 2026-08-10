@@ -63,6 +63,8 @@ impl FreeRpcSyncer {
         match network.family.as_str() {
             "evm" => self.sync_evm_network(network).await,
             "solana" => self.sync_solana_network(network).await,
+            "ton" => self.sync_ton_network(network).await,
+            "sui" => self.sync_sui_network(network).await,
             _ => Ok(ChainSyncResult {
                 chain_index: network.chain_index,
                 family: network.family.clone(),
@@ -71,7 +73,7 @@ impl FreeRpcSyncer {
                 inserted: 0,
                 updated: 0,
                 skipped: 0,
-                message: Some("当前仅自动导入 EVM 和 Solana 的免费 RPC".into()),
+                message: Some("当前仅自动导入 EVM、Solana、TON、Sui 的免费 RPC".into()),
             }),
         }
     }
@@ -149,6 +151,44 @@ impl FreeRpcSyncer {
         }
 
         let verified = verify_solana_candidates(self.http.clone(), candidates).await;
+        self.upsert_endpoints(network, "builtin", verified, None)
+            .await
+    }
+
+    async fn sync_ton_network(&self, network: &Network) -> AppResult<ChainSyncResult> {
+        let candidates = default_ton_rpcs();
+        if candidates.is_empty() {
+            return Ok(ChainSyncResult {
+                chain_index: network.chain_index,
+                family: network.family.clone(),
+                source: "builtin".into(),
+                discovered: 0,
+                inserted: 0,
+                updated: 0,
+                skipped: 0,
+                message: Some("当前没有 TON 的内置免费 RPC".into()),
+            });
+        }
+        let verified = verify_ton_candidates(self.http.clone(), candidates).await;
+        self.upsert_endpoints(network, "builtin", verified, None)
+            .await
+    }
+
+    async fn sync_sui_network(&self, network: &Network) -> AppResult<ChainSyncResult> {
+        let candidates = default_sui_rpcs();
+        if candidates.is_empty() {
+            return Ok(ChainSyncResult {
+                chain_index: network.chain_index,
+                family: network.family.clone(),
+                source: "builtin".into(),
+                discovered: 0,
+                inserted: 0,
+                updated: 0,
+                skipped: 0,
+                message: Some("当前没有 Sui 的内置免费 RPC".into()),
+            });
+        }
+        let verified = verify_sui_candidates(self.http.clone(), candidates).await;
         self.upsert_endpoints(network, "builtin", verified, None)
             .await
     }
@@ -323,6 +363,54 @@ async fn verify_solana_candidates(http: Client, urls: Vec<String>) -> Vec<String
     verified
 }
 
+async fn verify_ton_candidates(http: Client, urls: Vec<String>) -> Vec<String> {
+    let mut tasks = JoinSet::new();
+    for url in urls {
+        let client = http.clone();
+        tasks.spawn(async move {
+            if verify_ton_endpoint(client, &url).await {
+                Some(url)
+            } else {
+                None
+            }
+        });
+    }
+
+    let mut verified = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        if let Ok(Some(url)) = result {
+            verified.push(url);
+        }
+    }
+    verified.sort();
+    verified.dedup();
+    verified
+}
+
+async fn verify_sui_candidates(http: Client, urls: Vec<String>) -> Vec<String> {
+    let mut tasks = JoinSet::new();
+    for url in urls {
+        let client = http.clone();
+        tasks.spawn(async move {
+            if verify_sui_endpoint(client, &url).await {
+                Some(url)
+            } else {
+                None
+            }
+        });
+    }
+
+    let mut verified = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        if let Ok(Some(url)) = result {
+            verified.push(url);
+        }
+    }
+    verified.sort();
+    verified.dedup();
+    verified
+}
+
 async fn verify_evm_endpoint(http: Client, url: &str, expected_chain_id: u64) -> bool {
     let body = serde_json::json!({
         "jsonrpc": "2.0",
@@ -383,6 +471,70 @@ async fn verify_solana_endpoint(http: Client, url: &str) -> bool {
     value.get("result").and_then(|v| v.as_i64()).is_some()
 }
 
+async fn verify_ton_endpoint(http: Client, url: &str) -> bool {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getMasterchainInfo",
+        "params": crate::health::probe_params_for_chain("ton"),
+    });
+    let Ok(resp) = http
+        .post(url)
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(4))
+        .send()
+        .await
+    else {
+        return false;
+    };
+
+    if !resp.status().is_success() {
+        return false;
+    }
+
+    let Ok(value) = resp.json::<serde_json::Value>().await else {
+        return false;
+    };
+    // A healthy TON mainnet endpoint reports a masterchain seqno under
+    // `result.last.seqno`; absence / null means the endpoint is not
+    // serving the chain.
+    let Some(seqno) = value
+        .get("result")
+        .and_then(|r| r.get("last"))
+        .and_then(|l| l.get("seqno"))
+    else {
+        return false;
+    };
+    seqno.as_i64().is_some()
+}
+
+async fn verify_sui_endpoint(http: Client, url: &str) -> bool {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "suix_getReferenceGasPrice",
+        "params": crate::health::probe_params_for_chain("sui"),
+    });
+    let Ok(resp) = http
+        .post(url)
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(4))
+        .send()
+        .await
+    else {
+        return false;
+    };
+
+    if !resp.status().is_success() {
+        return false;
+    }
+
+    let Ok(value) = resp.json::<serde_json::Value>().await else {
+        return false;
+    };
+    value.get("result").and_then(|v| v.as_u64()).is_some()
+}
+
 fn default_solana_rpcs(chain_index: i64) -> Vec<String> {
     let urls = match chain_index {
         501 => vec![
@@ -395,6 +547,29 @@ fn default_solana_rpcs(chain_index: i64) -> Vec<String> {
     urls.into_iter()
         .filter_map(normalize_rpc_url)
         .collect::<Vec<_>>()
+}
+
+/// Default TON (The Open Network) mainnet RPCs. Both speak the v2 JSON-RPC
+/// surface exposed by the toncenter-style APIs.
+fn default_ton_rpcs() -> Vec<String> {
+    [
+        "https://toncenter.com/api/v2/jsonRPC",
+        "https://toncenter.api.onfinality.io/api/v2/jsonRPC",
+    ]
+    .into_iter()
+    .filter_map(normalize_rpc_url)
+    .collect()
+}
+
+/// Default Sui mainnet fullnode RPCs.
+fn default_sui_rpcs() -> Vec<String> {
+    [
+        "https://fullnode.mainnet.sui.io",
+        "https://sui-rpc.publicnode.com",
+    ]
+    .into_iter()
+    .filter_map(normalize_rpc_url)
+    .collect()
 }
 
 fn is_acceptable_chainlist_rpc(url: &str, tracking: Option<&str>) -> bool {

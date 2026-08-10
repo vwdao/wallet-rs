@@ -744,6 +744,7 @@ impl GasEstimator for SolanaChain {
             gas_limit: 200_000,
             max_fee_per_gas: Some((5000 + avg_priority) as u128),
             max_priority_fee_per_gas: Some(avg_priority as u128),
+            ..GasEstimate::default()
         })
     }
 }

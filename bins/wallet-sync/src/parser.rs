@@ -28,6 +28,11 @@ fn normalize_tx(
         Some(ChainFamily::Bitcoin) => normalize_utxo_tx(height, idx, &mut tx),
         Some(ChainFamily::Tron) => normalize_tron_tx(height, idx, &mut tx),
         Some(ChainFamily::UtxoOther) => normalize_utxo_tx(height, idx, &mut tx),
+        // TON (The Open Network) and Sui use non-account models; their
+        // per-block tx normalization is intentionally not implemented yet
+        // (see wallet-chain/src/ton and wallet-chain/src/sui). Pass txs
+        // through unchanged so callers can still surface the raw payload.
+        Some(ChainFamily::Ton) | Some(ChainFamily::Sui) => {}
         None => {
             tracing::warn!(
                 chain_index = chain_index.as_i64(),
@@ -246,5 +251,33 @@ mod tests {
     fn test_utxo_status_sets_success() {
         let txs = parse_block(ChainIndex::BTC, 100, vec![tx("btc1", json!({}))]);
         assert_eq!(txs[0].status, TxStatus::Success);
+    }
+
+    #[test]
+    fn test_ton_passes_through() {
+        // TON txs are already fully populated by `TonChain::fetch_block_txs`;
+        // parse_block should be a pass-through that just stamps the height.
+        let raw = json!({
+            "transaction_id": { "hash": "tonhash" },
+            "in_msg": { "source": "EQ..src", "destination": "EQ..dst", "value": "1000" },
+            "fee": "10",
+        });
+        let txs = parse_block(ChainIndex::TON, 42, vec![tx("tonhash", raw)]);
+        assert_eq!(txs[0].block_number, 42);
+        assert_eq!(txs[0].hash.as_str(), "tonhash");
+    }
+
+    #[test]
+    fn test_sui_passes_through() {
+        let raw = json!({
+            "digest": "suihash",
+            "transaction": {
+                "data": { "sender": "0xsender", "transaction": { "kind": "ProgrammableTransaction" } }
+            },
+            "effects": { "status": { "status": "success" } },
+        });
+        let txs = parse_block(ChainIndex::SUI, 99, vec![tx("suihash", raw)]);
+        assert_eq!(txs[0].block_number, 99);
+        assert_eq!(txs[0].hash.as_str(), "suihash");
     }
 }

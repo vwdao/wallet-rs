@@ -10,10 +10,14 @@ pub mod bitcoin;
 pub mod evm;
 #[cfg(feature = "solana")]
 pub mod solana;
+#[cfg(feature = "ton")]
+pub mod ton;
+#[cfg(feature = "sui")]
+pub mod sui;
 #[cfg(feature = "tron")]
 pub mod tron;
 #[cfg(feature = "tron")]
-mod ton;
+pub(crate) mod tron_grpc;
 
 pub use provider::{CircuitBreaker, RpcPool};
 pub use registry::{ChainHandle, ChainRegistry};
@@ -34,6 +38,8 @@ pub fn build_registry(chains: &[ChainRuntimeConfig]) -> AppResult<ChainRegistry>
             "solana" => ChainFamily::Solana,
             "bitcoin" => ChainFamily::Bitcoin,
             "tron" => ChainFamily::Tron,
+            "ton" => ChainFamily::Ton,
+            "sui" => ChainFamily::Sui,
             other => {
                 return Err(AppError::InvalidArgument(format!(
                     "unknown chain family: {other}"
@@ -49,6 +55,10 @@ pub fn build_registry(chains: &[ChainRuntimeConfig]) -> AppResult<ChainRegistry>
             ChainFamily::Bitcoin => ChainHandle::Bitcoin(bitcoin::BitcoinChain::new(cfg)?),
             #[cfg(feature = "tron")]
             ChainFamily::Tron => ChainHandle::Tron(tron::TronChain::new(cfg)?),
+            #[cfg(feature = "ton")]
+            ChainFamily::Ton => ChainHandle::Ton(ton::TonChain::new(cfg)?),
+            #[cfg(feature = "sui")]
+            ChainFamily::Sui => ChainHandle::Sui(sui::SuiChain::new(cfg)?),
             _ => {
                 return Err(AppError::ChainNotSupported(index));
             }

@@ -390,6 +390,7 @@ impl GasEstimator for EvmChain {
             gas_limit,
             max_fee_per_gas: max_fee,
             max_priority_fee_per_gas: max_priority,
+            ..GasEstimate::default()
         })
     }
 }

@@ -233,6 +233,7 @@ impl GasEstimator for BitcoinChain {
             gas_limit: 250,
             max_fee_per_gas: Some(sat_per_vb),
             max_priority_fee_per_gas: None,
+            ..GasEstimate::default()
         })
     }
 }

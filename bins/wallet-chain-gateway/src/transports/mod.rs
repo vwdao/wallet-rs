@@ -129,6 +129,14 @@ fn parse_block_height(result: &Value, family: &str) -> Option<i64> {
             .and_then(|r| r.get("number"))
             .and_then(|n| n.as_i64())
             .or_else(|| result.as_i64()),
+        // TON masterchain seqno: `{"last": {"seqno": <int>, ...}}`.
+        "ton" => result
+            .get("last")
+            .and_then(|l| l.get("seqno"))
+            .and_then(|s| s.as_i64())
+            .or_else(|| result.as_i64()),
+        // Sui: reference gas price is just a JSON number.
+        "sui" => result.as_i64(),
         _ => {
             let hex = result.as_str()?.trim_start_matches("0x");
             i64::from_str_radix(hex, 16).ok()

@@ -1,5 +1,5 @@
-use crate::ton::client::TronGrpcClient;
-use crate::ton::url::parse_gateway_grpc_url;
+use crate::tron_grpc::client::TronGrpcClient;
+use crate::tron_grpc::url::parse_gateway_grpc_url;
 use crate::provider::RpcPool;
 use crate::traits::{BalanceReader, BlockSource, GasEstimator, TokenBalance, TxBroadcaster};
 use async_trait::async_trait;
@@ -731,6 +731,7 @@ impl GasEstimator for TronChain {
                         gas_limit: energy.max(65_000),
                         max_fee_per_gas: None,
                         max_priority_fee_per_gas: None,
+                        ..GasEstimate::default()
                     });
                 }
             }
@@ -739,6 +740,7 @@ impl GasEstimator for TronChain {
             gas_limit: 65_000,
             max_fee_per_gas: None,
             max_priority_fee_per_gas: None,
+            ..GasEstimate::default()
         })
     }
 }

@@ -59,6 +59,10 @@ pub fn probe_method_for_chain(family: &str) -> &str {
         "solana" => "getSlot",
         "bitcoin" => "getblockcount",
         "tron" => "getnowblock",
+        // TON (The Open Network): masterchain head seqno.
+        "ton" => "getMasterchainInfo",
+        // Sui: reference gas price as a cheap, always-on "tip" probe.
+        "sui" => "suix_getReferenceGasPrice",
         _ => "eth_blockNumber",
     }
 }
@@ -66,6 +70,8 @@ pub fn probe_method_for_chain(family: &str) -> &str {
 pub fn probe_params_for_chain(family: &str) -> serde_json::Value {
     match family {
         "solana" => serde_json::json!([{ "commitment": "finalized" }]),
+        "ton" => serde_json::json!({}),
+        "sui" => serde_json::json!([]),
         _ => serde_json::json!([]),
     }
 }

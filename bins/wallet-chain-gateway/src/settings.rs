@@ -16,6 +16,13 @@ pub struct GatewayConfig {
     /// Solana slot lag tolerance. Slots are ~400ms; tens of slots of skew across
     /// providers is common, so this is intentionally higher than `max_block_lag`.
     pub solana_max_block_lag: i64,
+    /// TON masterchain seqno lag tolerance. Masterchain blocks are ~5s, so a
+    /// few seqnos of skew is normal.
+    pub ton_max_block_lag: i64,
+    /// Sui checkpoint lag tolerance. Checkpoints are ~3s, so a small lag is
+    /// normal; we use a slightly larger budget than the generic default to
+    /// absorb indexer-side bursts.
+    pub sui_max_block_lag: i64,
     pub global_rate_limit_per_min: usize,
     pub stats_batch_interval_ms: u64,
     pub log_requests: bool,
@@ -30,6 +37,8 @@ impl Default for GatewayConfig {
             max_retries: 3,
             max_block_lag: 10,
             solana_max_block_lag: 64,
+            ton_max_block_lag: 16,
+            sui_max_block_lag: 32,
             global_rate_limit_per_min: 0,
             stats_batch_interval_ms: 1_000,
             log_requests: false,
@@ -41,6 +50,8 @@ impl GatewayConfig {
     pub fn max_block_lag_for_family(&self, family: &str) -> i64 {
         match family {
             "solana" => self.solana_max_block_lag.max(0),
+            "ton" => self.ton_max_block_lag.max(0),
+            "sui" => self.sui_max_block_lag.max(0),
             _ => self.max_block_lag.max(0),
         }
     }
@@ -149,6 +160,12 @@ impl SettingsReloader {
             solana_max_block_lag: get("solana_max_block_lag")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(64),
+            ton_max_block_lag: get("ton_max_block_lag")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(16),
+            sui_max_block_lag: get("sui_max_block_lag")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(32),
             global_rate_limit_per_min: get("global_rate_limit_per_min")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(0),
@@ -171,12 +188,16 @@ mod tests {
         let cfg = GatewayConfig {
             max_block_lag: 10,
             solana_max_block_lag: 64,
+            ton_max_block_lag: 16,
+            sui_max_block_lag: 32,
             ..GatewayConfig::default()
         };
         assert_eq!(cfg.max_block_lag_for_family("solana"), 64);
         assert_eq!(cfg.max_block_lag_for_family("evm"), 10);
         assert_eq!(cfg.max_block_lag_for_family("bitcoin"), 10);
         assert_eq!(cfg.max_block_lag_for_family("tron"), 10);
+        assert_eq!(cfg.max_block_lag_for_family("ton"), 16);
+        assert_eq!(cfg.max_block_lag_for_family("sui"), 32);
     }
 
     #[test]
@@ -184,5 +205,14 @@ mod tests {
         let cfg = GatewayConfig::default();
         assert!(cfg.solana_max_block_lag >= 40);
         assert_eq!(cfg.max_block_lag_for_family("solana"), cfg.solana_max_block_lag);
+    }
+
+    #[test]
+    fn default_ton_and_sui_have_dedicated_max_block_lag() {
+        let cfg = GatewayConfig::default();
+        assert!(cfg.ton_max_block_lag > 0);
+        assert!(cfg.sui_max_block_lag > 0);
+        assert_eq!(cfg.max_block_lag_for_family("ton"), cfg.ton_max_block_lag);
+        assert_eq!(cfg.max_block_lag_for_family("sui"), cfg.sui_max_block_lag);
     }
 }

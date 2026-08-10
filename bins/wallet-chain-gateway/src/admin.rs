@@ -436,6 +436,8 @@ fn infer_network_meta(chain_index: i64) -> (String, &'static str) {
         133 => ("ZEC", ChainFamily::for_index(wallet_types::ChainIndex::ZCASH)),
         195 => ("TRON", ChainFamily::for_index(wallet_types::ChainIndex::TRON)),
         501 => ("SOL", ChainFamily::for_index(wallet_types::ChainIndex::SOL)),
+        607 => ("TON", ChainFamily::for_index(wallet_types::ChainIndex::TON)),
+        784 => ("SUI", ChainFamily::for_index(wallet_types::ChainIndex::SUI)),
         966 => ("POL", ChainFamily::for_index(wallet_types::ChainIndex::POL)),
         8453 => ("BASE", ChainFamily::for_index(wallet_types::ChainIndex::BASE)),
         20000714 => ("BSC", ChainFamily::for_index(wallet_types::ChainIndex::BSC)),
@@ -1626,6 +1628,8 @@ mod tests {
         assert_eq!(infer_network_meta(133), ("ZEC".into(), "bitcoin"));
         assert_eq!(infer_network_meta(195), ("TRON".into(), "tron"));
         assert_eq!(infer_network_meta(501), ("SOL".into(), "solana"));
+        assert_eq!(infer_network_meta(607), ("TON".into(), "ton"));
+        assert_eq!(infer_network_meta(784), ("SUI".into(), "sui"));
     }
 
     #[test]
