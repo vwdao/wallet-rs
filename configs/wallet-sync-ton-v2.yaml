@@ -17,9 +17,11 @@ chain:
   chain_index: 607
   family: ton
   # TON API version: 2, 3, or 4
-  # v2: https://toncenter.com/api/v2/jsonRPC (public, limited transaction data)
-  # v3: https://toncenter.com/api/v3/jsonRPC (paid, full transaction data)
-  # v4: future version (current development)
+  # Only toncenter v2-style JSON-RPC endpoints are currently supported
+  # (https://toncenter.com/api/v2/jsonRPC). toncenter v3 (/api/v3/...) is an
+  # indexed REST API that rejects the JSON-RPC methods wallet-chain calls, so
+  # it never passes the health probe. v3/v4 in config select the same v2
+  # JSON-RPC surface for now.
   ton_api_version: 2
   confirmations: 5
 

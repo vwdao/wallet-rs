@@ -34,6 +34,13 @@ const ARCHIVE_PROBE_ADDRESS: &str = "0x0000000000000000000000000000000000000000"
 const ARCHIVE_PROBE_BLOCK: &str = "0x1";
 const ARCHIVE_REPROBE_INTERVAL_HOURS: i64 = 6;
 
+/// Consecutive health cycles an endpoint must be observed behind before the
+/// lag rule marks it unhealthy. Public RPCs on fast chains (Arbitrum, Base,
+/// OP) routinely trail the reference node by a handful of blocks for a few
+/// seconds; a single observation would flap the endpoint in and out of
+/// rotation every cycle.
+const LAG_UNHEALTHY_CONSECUTIVE: u32 = 3;
+
 async fn probe_archive_capability(
     http: &reqwest::Client,
     url: &str,
@@ -86,6 +93,7 @@ pub struct HealthChecker {
     http: reqwest::Client,
     interval: Duration,
     settings: SettingsHandle,
+    consecutive_lag: std::collections::HashMap<String, u32>,
 }
 
 impl HealthChecker {
@@ -100,21 +108,23 @@ impl HealthChecker {
             http,
             interval,
             settings,
+            consecutive_lag: std::collections::HashMap::new(),
         }
     }
 
     pub fn spawn(self) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
+            let mut this = self;
             loop {
-                if let Err(e) = self.check_all().await {
+                if let Err(e) = this.check_all().await {
                     tracing::error!("health check cycle failed: {e}");
                 }
-                tokio::time::sleep(self.interval).await;
+                tokio::time::sleep(this.interval).await;
             }
         })
     }
 
-    async fn check_all(&self) -> AppResult<()> {
+    async fn check_all(&mut self) -> AppResult<()> {
         let cfg = self.settings.get();
         let mut db = self.db.clone_inner();
         let mut endpoints: Vec<RpcEndpoint> =
@@ -136,6 +146,8 @@ impl HealthChecker {
 
         let mut chain_heights: std::collections::HashMap<i64, Vec<i64>> =
             std::collections::HashMap::new();
+        let mut seen_healthy: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
 
         for ep in endpoints.iter_mut() {
             let family = family_map
@@ -144,6 +156,13 @@ impl HealthChecker {
                 .unwrap_or("evm");
             let probe_method = probe_method_for_chain(family);
             let protocol = crate::protocol::EndpointProtocol::from_config_opt(&ep.protocol);
+            // The effective protocol is what `transports::probe` will actually
+            // use: the config override when set, otherwise the URL scheme
+            // (e.g. `grpcs://` must resolve to Grpc even when the endpoint row
+            // has no protocol column). The gRPC exception below relies on it.
+            let effective_protocol = crate::protocol::parse_endpoint_url_with(&ep.url, protocol)
+                .map(|(p, _)| p)
+                .unwrap_or(protocol.unwrap_or(EndpointProtocol::Http));
             let headers = serde_json::from_value(ep.headers.clone()).unwrap_or_default();
             let result =
                 transports::probe(&self.http, &ep.url, protocol, &headers, probe_method, family)
@@ -157,7 +176,7 @@ impl HealthChecker {
             // unhealthy instead of staying in rotation with a cleared height.
             // gRPC is the exception: its probe is connectivity-only.
             let result = match result {
-                Ok((_latency, None)) if !matches!(protocol, Some(EndpointProtocol::Grpc)) => {
+                Ok((_latency, None)) if effective_protocol != EndpointProtocol::Grpc => {
                     tracing::warn!(
                         endpoint = %ep.url,
                         chain = ep.chain_index,
@@ -235,6 +254,13 @@ impl HealthChecker {
                         .await
                         .map_err(|e| wallet_error::AppError::internal(e.to_string()))?;
                     if !healthy {
+                        if family == "ton" && !ep.url.to_ascii_lowercase().contains("/jsonrpc") {
+                            tracing::warn!(
+                                endpoint = %ep.url,
+                                errors = new_err_count,
+                                "TON endpoint is not a toncenter v2 JSON-RPC URL (path must contain /jsonRPC); toncenter v3 is a REST API and will never pass the probe"
+                            );
+                        }
                         tracing::warn!(
                             endpoint = %ep.url,
                             errors = new_err_count,
@@ -275,27 +301,52 @@ impl HealthChecker {
             .map_err(|e| wallet_error::AppError::internal(e.to_string()))?;
 
             for mut ep in eps {
+                seen_healthy.insert(ep.url.clone());
                 if let Some(h) = ep.block_height {
                     let lag = max_height.saturating_sub(h);
                     if lag > max_block_lag {
-                        tracing::warn!(
-                            endpoint = %ep.url,
-                            block_height = h,
-                            max_height,
-                            lag,
-                            max_block_lag,
-                            family,
-                            "endpoint significantly behind, marking unhealthy"
-                        );
-                        ep.update()
-                            .healthy(false)
-                            .exec(&mut db)
-                            .await
-                            .map_err(|e| wallet_error::AppError::internal(e.to_string()))?;
+                        let count =
+                            self.consecutive_lag.get(&ep.url).copied().unwrap_or(0) + 1;
+                        self.consecutive_lag.insert(ep.url.clone(), count);
+                        if count >= LAG_UNHEALTHY_CONSECUTIVE {
+                            tracing::warn!(
+                                endpoint = %ep.url,
+                                block_height = h,
+                                max_height,
+                                lag,
+                                max_block_lag,
+                                consecutive = count,
+                                family,
+                                "endpoint significantly behind, marking unhealthy"
+                            );
+                            ep.update()
+                                .healthy(false)
+                                .exec(&mut db)
+                                .await
+                                .map_err(|e| wallet_error::AppError::internal(e.to_string()))?;
+                        } else {
+                            tracing::warn!(
+                                endpoint = %ep.url,
+                                block_height = h,
+                                max_height,
+                                lag,
+                                max_block_lag,
+                                consecutive = count,
+                                family,
+                                "endpoint lagging, not yet marked unhealthy"
+                            );
+                        }
+                    } else {
+                        self.consecutive_lag.remove(&ep.url);
                     }
                 }
             }
         }
+
+        // Keep lag counters only for endpoints still in the healthy set this
+        // cycle, so a recovered endpoint restarts from a clean slate.
+        self.consecutive_lag
+            .retain(|url, _| seen_healthy.contains(url));
 
         Ok(())
     }

@@ -451,6 +451,19 @@ fn infer_network_meta(chain_index: i64) -> (String, &'static str) {
     (name.to_string(), family.map(|f| f.as_str()).unwrap_or("evm"))
 }
 
+async fn network_family(db: &wallet_db::Db, chain_index: i64) -> AppResult<String> {
+    let mut inner = db.clone_inner();
+    let rows: Vec<Network> = Network::filter(Network::fields().chain_index().eq(chain_index))
+        .exec(&mut inner)
+        .await
+        .map_err(|e| AppError::internal(e.to_string()))?;
+    Ok(rows
+        .into_iter()
+        .next()
+        .map(|n| n.family)
+        .unwrap_or_else(|| "evm".into()))
+}
+
 async fn ensure_network(db: &wallet_db::Db, chain_index: i64) -> AppResult<Network> {
     let mut inner = db.clone_inner();
     let rows: Vec<Network> = Network::filter(Network::fields().chain_index().eq(chain_index))
@@ -616,15 +629,18 @@ async fn create_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
+        let mut db = st.db.clone_inner();
+        let network = ensure_network(&st.db, body.chain_index).await?;
         proxy::validate_endpoint_url(&body.url)?;
+        if network.family == "ton" {
+            proxy::validate_ton_endpoint_url(&body.url)?;
+        }
         validate_headers(&body.headers)?;
         validate_protocol(&body.protocol)?;
 
         let headers = serde_json::to_value(&body.headers)
             .map_err(|e| AppError::internal(format!("encode headers: {e}")))?;
 
-        let mut db = st.db.clone_inner();
-        ensure_network(&st.db, body.chain_index).await?;
         let row = toasty::create!(RpcEndpoint {
             chain_index: body.chain_index,
             url: &body.url,
@@ -670,9 +686,6 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
             .await
             .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
 
-        if let Some(url) = &body.url {
-            proxy::validate_endpoint_url(url)?;
-        }
         if let Some(headers) = &body.headers {
             validate_headers(headers)?;
         }
@@ -684,6 +697,13 @@ async fn update_endpoint(req: &mut Request, depot: &mut Depot, res: &mut Respons
         let mut row: RpcEndpoint = RpcEndpoint::get_by_id(&mut db, &id)
             .await
             .map_err(|_| AppError::NotFound("endpoint not found".into()))?;
+
+        if let Some(url) = &body.url {
+            proxy::validate_endpoint_url(url)?;
+            if network_family(&st.db, row.chain_index).await? == "ton" {
+                proxy::validate_ton_endpoint_url(url)?;
+            }
+        }
 
         let chain_index = row.chain_index;
         let mut upd = row.update();

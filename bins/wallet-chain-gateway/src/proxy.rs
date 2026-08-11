@@ -122,6 +122,17 @@ pub fn validate_endpoint_url(url: &str) -> Result<(), AppError> {
     Ok(())
 }
 
+pub fn validate_ton_endpoint_url(url: &str) -> Result<(), AppError> {
+    validate_endpoint_url(url)?;
+    let lower = url.to_ascii_lowercase();
+    if !lower.contains("/jsonrpc") {
+        return Err(AppError::InvalidArgument(format!(
+            "TON endpoint must be a toncenter v2 JSON-RPC URL (path must contain /jsonRPC, e.g. https://toncenter.com/api/v2/jsonRPC); toncenter v3 is a REST API and is not supported: {url}"
+        )));
+    }
+    Ok(())
+}
+
 /// Validate that every entry is a plain IP address or a CIDR block.
 pub fn validate_ip_list(entries: &[String]) -> Result<(), AppError> {
     for entry in entries {

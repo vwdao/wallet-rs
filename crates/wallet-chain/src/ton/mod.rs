@@ -3,14 +3,15 @@
 //! The chain-gateway transparently forwards JSON-RPC requests to a TON HTTP
 //! endpoint, but the sync pipeline (wallet-sync) and the API (wallet-api) need
 //! a typed wrapper around the few methods they actually call. TON's public
-//! HTTP API (https://toncenter.com/api/v2/) is JSON-RPC 2.0 compatible: the
-//! bodies it accepts look like `{"jsonrpc":"2.0","id":1,"method":...,
-//! "params":{...}}` and the responses mirror the same shape.
+//! HTTP API (https://toncenter.com/api/v2/jsonRPC) is JSON-RPC 2.0
+//! compatible: the bodies it accepts look like `{"jsonrpc":"2.0","id":1,
+//! "method":..., "params":{...}}` and the responses mirror the same shape.
 //!
-//! Supported API versions:
-//! - v2: https://toncenter.com/api/v2/jsonRPC (public, limited features)
-//! - v3: https://toncenter.com/api/v3/jsonRPC (paid, full features)
-//! - v4: future version
+//! Only toncenter v2-style JSON-RPC endpoints are supported. `ton_api_version`
+//! 3/4 in config currently selects the same v2 JSON-RPC surface — toncenter v3
+//! (`/api/v3/...`) is an indexed REST API that rejects these JSON-RPC methods,
+//! so a v3 URL will never probe healthy. Endpoints whose path does not contain
+//! `/jsonRPC` are rejected by the chain-gateway admin API.
 //!
 //! The methods we call today:
 //! - `getAddressInformation`  → balance / state for a wallet (BOC-free path)

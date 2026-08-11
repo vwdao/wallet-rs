@@ -41,7 +41,27 @@ impl FreeRpcSyncer {
 
         let mut results = Vec::with_capacity(networks.len());
         for network in networks {
-            results.push(self.sync_network(&network).await?);
+            match self.sync_network(&network).await {
+                Ok(result) => results.push(result),
+                Err(e) => {
+                    tracing::warn!(
+                        chain_index = network.chain_index,
+                        family = %network.family,
+                        error = %e,
+                        "free rpc sync failed for network, continuing with others"
+                    );
+                    results.push(ChainSyncResult {
+                        chain_index: network.chain_index,
+                        family: network.family.clone(),
+                        source: "error".into(),
+                        discovered: 0,
+                        inserted: 0,
+                        updated: 0,
+                        skipped: 0,
+                        message: Some(e.to_string()),
+                    });
+                }
+            }
         }
         Ok(results)
     }

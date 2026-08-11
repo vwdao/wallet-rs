@@ -1,5 +1,11 @@
 # TON wallet sync config using v3 API (paid, full features)
-# Use this when connecting to toncenter v3 or other v3-compatible endpoints with full transaction data
+#
+# NOTE: toncenter v3 (/api/v3/...) is an indexed REST API and does NOT accept
+# the JSON-RPC methods wallet-chain calls (getMasterchainInfo, lookupBlock,
+# shards, getBlockTransactionsExt) — `https://toncenter.com/api/v3/jsonRPC`
+# returns "Method Not Allowed". The TON driver currently only speaks toncenter
+# v2-style JSON-RPC, so this config points at a working v2 endpoint while
+# keeping `ton_api_version: 3` to exercise that code path.
 
 poll_interval_ms: 5000
 block_fetch_concurrency: 4
@@ -17,12 +23,11 @@ chain:
   chain_index: 607
   family: ton
   # TON API version: 2, 3, or 4
-  # v2: https://toncenter.com/api/v2/jsonRPC (public, limited transaction data)
-  # v3: https://toncenter.com/api/v3/jsonRPC (paid, full transaction data)
-  # v4: future version (current development)
+  # v2/v3/v4 currently all select the same v2-style JSON-RPC surface; only
+  # endpoints whose path contains /jsonRPC are usable.
   ton_api_version: 3
   confirmations: 5
 
   endpoints:
-    - url: "https://toncenter.com/api/v3/jsonRPC"
+    - url: "https://toncenter.com/api/v2/jsonRPC"
       weight: 1
