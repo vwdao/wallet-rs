@@ -512,7 +512,7 @@ async fn verify_sui_endpoint(http: Client, url: &str) -> bool {
     let body = serde_json::json!({
         "jsonrpc": "2.0",
         "id": 1,
-        "method": "suix_getReferenceGasPrice",
+        "method": "sui_getLatestCheckpointSequenceNumber",
         "params": crate::health::probe_params_for_chain("sui"),
     });
     let Ok(resp) = http
@@ -532,7 +532,11 @@ async fn verify_sui_endpoint(http: Client, url: &str) -> bool {
     let Ok(value) = resp.json::<serde_json::Value>().await else {
         return false;
     };
-    value.get("result").and_then(|v| v.as_u64()).is_some()
+    // Sui serializes the checkpoint seq as a decimal string.
+    value
+        .get("result")
+        .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()).or_else(|| v.as_u64()))
+        .is_some()
 }
 
 fn default_solana_rpcs(chain_index: i64) -> Vec<String> {
@@ -561,11 +565,15 @@ fn default_ton_rpcs() -> Vec<String> {
     .collect()
 }
 
-/// Default Sui mainnet fullnode RPCs.
+/// Default Sui mainnet JSON-RPC fullnodes.
+///
+/// NOTE: `fullnode.mainnet.sui.io` (the official public fullnode) deprecated
+/// its JSON-RPC surface in favor of gRPC/GraphQL, so it is NOT listed here —
+/// only providers that still serve JSON-RPC.
 fn default_sui_rpcs() -> Vec<String> {
     [
-        "https://fullnode.mainnet.sui.io",
         "https://sui-rpc.publicnode.com",
+        "https://sui.blockpi.network/v1/rpc/public",
     ]
     .into_iter()
     .filter_map(normalize_rpc_url)

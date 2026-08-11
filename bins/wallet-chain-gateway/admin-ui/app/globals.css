@@ -369,6 +369,47 @@ td.url {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+td.url.copied {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.url-tooltip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  max-width: 480px;
+  padding: 10px 12px;
+  background: var(--elevated);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.url-tooltip-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.url-tooltip-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.url-tooltip-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--accent);
 }
 
 /* Login */

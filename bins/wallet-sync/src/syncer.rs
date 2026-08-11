@@ -29,38 +29,91 @@ pub struct SyncRuntime {
     pub block_fetch_concurrency: usize,
 }
 
+/// Upper bound for the poll interval while the RPC/gateway is not serving a
+/// usable tip. Prevents hammering a dead or lagging endpoint every tick while
+/// still probing often enough to recover promptly.
+const MAX_FAILURE_POLL_MS: u64 = 60_000;
+
+/// Outcome of one sync tick.
+struct TickOutcome {
+    /// `poll_interval_ms` to use once the chain is healthy again.
+    poll_ms: u64,
+    /// Height of the last block persisted this tick, if any.
+    last_synced: Option<u64>,
+    /// False when the RPC did not serve a usable tip (height 0 or an error).
+    rpc_healthy: bool,
+}
+
+impl TickOutcome {
+    fn failed(default_poll_ms: u64) -> Self {
+        Self {
+            poll_ms: default_poll_ms,
+            last_synced: None,
+            rpc_healthy: false,
+        }
+    }
+}
+
+/// Geometric backoff (2s → 4s → 8s → … capped at `MAX_FAILURE_POLL_MS`)
+/// applied after `consecutive` unusable-tip ticks.
+fn failure_poll_ms(poll_ms: u64, consecutive: u64) -> u64 {
+    let shift = consecutive.saturating_sub(1).min(15);
+    poll_ms
+        .saturating_mul(1u64 << shift)
+        .min(MAX_FAILURE_POLL_MS)
+}
+
 pub async fn run(rt: SyncRuntime) -> AppResult<()> {
     tracing::info!(chain = %rt.chain_index, "wallet-sync started");
-    let mut last_poll_ms = rt.poll_interval_ms;
+    // Consecutive ticks where the RPC did not serve a usable tip. Drives
+    // both log throttling and poll backoff.
+    let mut consecutive_failures = 0u64;
     loop {
-        // `tick` already loads SyncSetting; reuse it for the sleep so we
-        // don't issue a second SELECT just to learn the poll interval.
-        let (next_poll, _) = match tick(&rt, last_poll_ms).await {
-            Ok(t) => t,
+        let consecutive = consecutive_failures;
+        let outcome = match tick(&rt, consecutive).await {
+            Ok(o) => o,
             Err(e) => {
-                tracing::warn!(error = %e, "sync tick failed");
-                (rt.poll_interval_ms, None)
+                if consecutive == 0 {
+                    tracing::warn!(error = %e, "sync tick failed");
+                } else {
+                    tracing::debug!(consecutive, error = %e, "sync tick still failing");
+                }
+                TickOutcome::failed(rt.poll_interval_ms)
             }
         };
-        last_poll_ms = next_poll;
-        tokio::time::sleep(Duration::from_millis(next_poll)).await;
+        let sleep_ms = if outcome.rpc_healthy {
+            if consecutive_failures > 0 {
+                tracing::info!(
+                    chain = %rt.chain_index,
+                    consecutive = consecutive_failures,
+                    last_synced = ?outcome.last_synced,
+                    "rpc recovered"
+                );
+            }
+            consecutive_failures = 0;
+            outcome.poll_ms
+        } else {
+            consecutive_failures = consecutive_failures.saturating_add(1);
+            failure_poll_ms(outcome.poll_ms, consecutive_failures)
+        };
+        tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
     }
 }
 
 /// Run one catch-up sweep: process every block between the cursor and the
 /// safe tip, then advance the cursor in a single write.
 ///
-/// Returns the `poll_interval_ms` to use for the next sleep, plus the height
-/// of the last block that was persisted (for logging/testing).
+/// `consecutive_failures` counts prior ticks where the RPC did not serve a
+/// usable tip; it only controls log verbosity here (backoff lives in `run`).
 async fn tick(
     rt: &SyncRuntime,
-    default_poll_ms: u64,
-) -> AppResult<(u64, Option<u64>)> {
+    consecutive_failures: u64,
+) -> AppResult<TickOutcome> {
     let setting = SyncSettingRepo::new(&rt.db).get(rt.chain_index).await?;
     let poll_ms = setting
         .as_ref()
         .map(|s| s.poll_interval_ms as u64)
-        .unwrap_or(default_poll_ms);
+        .unwrap_or(rt.poll_interval_ms);
     let confirmations = setting
         .as_ref()
         .map(|s| s.confirmations as u64)
@@ -69,16 +122,34 @@ async fn tick(
     if let Some(s) = &setting {
         if !s.enabled {
             tracing::debug!(chain = %rt.chain_index, "sync disabled via db settings");
-            return Ok((poll_ms, None));
+            return Ok(TickOutcome {
+                poll_ms,
+                last_synced: None,
+                rpc_healthy: true,
+            });
         }
     }
 
     let tip = rt.chain.tip().await?;
     // A real chain never reports height 0; treat it as a transient RPC/gateway
-    // failure and skip the tick rather than rewinding the cursor.
+    // failure and skip the tick rather than rewinding the cursor. The warn is
+    // logged once per outage, then demoted to debug so a long outage doesn't
+    // spam logs every poll.
     if tip == 0 {
-        tracing::warn!(chain = %rt.chain_index, "rpc reported tip height 0, skipping tick");
-        return Ok((poll_ms, None));
+        if consecutive_failures == 0 {
+            tracing::warn!(chain = %rt.chain_index, "rpc reported tip height 0, skipping tick");
+        } else {
+            tracing::debug!(
+                chain = %rt.chain_index,
+                consecutive = consecutive_failures,
+                "rpc still reporting tip height 0, skipping tick"
+            );
+        }
+        return Ok(TickOutcome {
+            poll_ms,
+            last_synced: None,
+            rpc_healthy: false,
+        });
     }
     let safe = tip.saturating_sub(confirmations);
     let mut cursor = rt.redis.cursor_get(rt.chain_index).await?;
@@ -161,7 +232,11 @@ async fn tick(
         rt.redis.cursor_set(rt.chain_index, cursor).await?;
         tracing::info!(chain = %rt.chain_index, tip, safe, synced, "sync catch-up complete");
     }
-    Ok((poll_ms, last_synced))
+    Ok(TickOutcome {
+        poll_ms,
+        last_synced,
+        rpc_healthy: true,
+    })
 }
 
 /// Fan out `fetch_block_txs` over a window of heights in parallel.

@@ -371,10 +371,10 @@ impl TonChain {
                 .map(|s| s.to_string());
             out.extend(txs.into_iter().filter_map(|raw| {
                 let tx = self.parse_ton_tx(&raw, mc_height, "");
-                if tx.hash.as_str().is_empty() {
-                    None
-                } else {
+                if ton_tx_worth_persisting(&tx) {
                     Some(tx)
+                } else {
+                    None
                 }
             }));
             let incomplete = page
@@ -405,9 +405,27 @@ impl TonChain {
             .to_string();
 
         let in_msg = raw.get("in_msg");
+        let first_out = raw
+            .get("out_msgs")
+            .and_then(|o| o.as_array())
+            .and_then(|a| a.first());
+
+        // Prefer a non-zero inbound value; wallet external-message txs often
+        // carry `in_msg.value = "0"` with the real transfer on `out_msgs[0]`.
+        let in_value = in_msg
+            .and_then(|m| m.get("value"))
+            .and_then(parse_ton_nanoton_str)
+            .filter(|&v| v > 0);
+        let out_value = first_out
+            .and_then(|m| m.get("value"))
+            .and_then(parse_ton_nanoton_str)
+            .filter(|&v| v > 0);
+        let value = in_value.or(out_value);
+
         let from = in_msg
             .and_then(|m| m.get("source"))
             .and_then(ton_account_address)
+            .or_else(|| first_out.and_then(|m| m.get("source")).and_then(ton_account_address))
             .or_else(|| {
                 if default_from.is_empty() {
                     None
@@ -416,26 +434,22 @@ impl TonChain {
                 }
             });
 
-        let to = in_msg
-            .and_then(|m| m.get("destination"))
-            .and_then(ton_account_address)
-            .or_else(|| {
-                raw.get("address")
-                    .and_then(ton_account_address)
-            });
-
-        // Value is the nanotons attached to the incoming message; for outgoing
-        // transfers we read from the first out_msg of the same type.
-        let value = in_msg
-            .and_then(|m| m.get("value"))
-            .and_then(parse_ton_nanoton_str)
-            .or_else(|| {
-                raw.get("out_msgs")
-                    .and_then(|o| o.as_array())
-                    .and_then(|a| a.first())
-                    .and_then(|m| m.get("value"))
-                    .and_then(parse_ton_nanoton_str)
-            });
+        let to = match in_value {
+            // Internal transfer: destination is the in_msg recipient.
+            Some(_) => in_msg
+                .and_then(|m| m.get("destination"))
+                .and_then(ton_account_address),
+            // External / zero-in: use the first out_msg destination when present.
+            None => first_out
+                .and_then(|m| m.get("destination"))
+                .and_then(ton_account_address)
+                .or_else(|| {
+                    in_msg
+                        .and_then(|m| m.get("destination"))
+                        .and_then(ton_account_address)
+                })
+                .or_else(|| raw.get("address").and_then(ton_account_address)),
+        };
 
         let fee = raw.get("fee").and_then(parse_ton_nanoton_str);
 
@@ -687,6 +701,12 @@ fn ton_account_address(v: &Value) -> Option<Address> {
         .map(Address::new)
 }
 
+/// Zero-value TON txs are system/tick noise (elector, config, empty externals)
+/// and are not persisted into `transactions`.
+fn ton_tx_worth_persisting(tx: &NormalizedTx) -> bool {
+    !tx.hash.as_str().is_empty() && tx.value.raw > rust_decimal::Decimal::ZERO
+}
+
 /// Read the masterchain seqno from a `getMasterchainInfo` response.
 ///
 /// The standard toncenter v2/v3 shape is:
@@ -717,7 +737,7 @@ pub(crate) fn parse_ton_seqno(result: &Value) -> Option<u64> {
 mod tests {
     use super::{
         extract_ton_block_hashes, parse_ton_nanoton_str, parse_ton_seqno, ton_tx_status,
-        TonApiVersion, TonChain,
+        ton_tx_worth_persisting, TonApiVersion, TonChain,
     };
     use serde_json::json;
     use wallet_types::{Address, Amount, GasEstimateRequest, TxStatus};
@@ -805,6 +825,65 @@ mod tests {
             tx.value,
             Amount::new(rust_decimal::Decimal::from(127_854_000_000u64), 9)
         );
+    }
+
+    #[test]
+    fn ton_parse_ton_tx_uses_out_msg_value_when_in_msg_is_zero() {
+        // Wallet external-message txs attach value on out_msgs; in_msg.value
+        // is "0". Treating that as authoritative left value=0 in the DB.
+        let chain = TonChain {
+            chain_index: CI(607),
+            pool: crate::provider::RpcPool::new(vec![wallet_config::RpcEndpoint {
+                url: "https://example.org".into(),
+                weight: 1,
+            }])
+            .unwrap(),
+            api_version: TonApiVersion::V2,
+        };
+        let raw = json!({
+            "transaction_id": { "hash": "extHash" },
+            "in_msg": {
+                "source": { "account_address": "" },
+                "destination": { "account_address": "EQ..wallet" },
+                "value": "0"
+            },
+            "out_msgs": [{
+                "source": { "account_address": "EQ..wallet" },
+                "destination": { "account_address": "EQ..dst" },
+                "value": "261492865"
+            }],
+            "fee": "447763"
+        });
+        let tx = chain.parse_ton_tx(&raw, 1, "");
+        assert_eq!(
+            tx.value,
+            Amount::new(rust_decimal::Decimal::from(261_492_865u64), 9)
+        );
+        assert_eq!(tx.from.as_ref().unwrap().as_str(), "EQ..wallet");
+        assert_eq!(tx.to.as_ref().unwrap().as_str(), "EQ..dst");
+        assert!(ton_tx_worth_persisting(&tx));
+    }
+
+    #[test]
+    fn ton_zero_value_tx_is_not_worth_persisting() {
+        let chain = TonChain {
+            chain_index: CI(607),
+            pool: crate::provider::RpcPool::new(vec![wallet_config::RpcEndpoint {
+                url: "https://example.org".into(),
+                weight: 1,
+            }])
+            .unwrap(),
+            api_version: TonApiVersion::V2,
+        };
+        let raw = json!({
+            "transaction_id": { "hash": "sysHash" },
+            "address": { "account_address": "Ef8zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM0vF" },
+            "out_msgs": [],
+            "fee": "0"
+        });
+        let tx = chain.parse_ton_tx(&raw, 1, "");
+        assert_eq!(tx.value.raw, rust_decimal::Decimal::ZERO);
+        assert!(!ton_tx_worth_persisting(&tx));
     }
 
     #[test]

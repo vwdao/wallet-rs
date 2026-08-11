@@ -135,8 +135,12 @@ fn parse_block_height(result: &Value, family: &str) -> Option<i64> {
             .and_then(|l| l.get("seqno"))
             .and_then(|s| s.as_i64())
             .or_else(|| result.as_i64()),
-        // Sui: reference gas price is just a JSON number.
-        "sui" => result.as_i64(),
+        // Sui: checkpoint seq is a BigInt serialized as a decimal string
+        // (some providers send a JSON number instead).
+        "sui" => result
+            .as_str()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| result.as_i64()),
         _ => {
             let hex = result.as_str()?.trim_start_matches("0x");
             i64::from_str_radix(hex, 16).ok()

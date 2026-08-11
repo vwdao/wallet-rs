@@ -61,8 +61,13 @@ pub fn probe_method_for_chain(family: &str) -> &str {
         "tron" => "getnowblock",
         // TON (The Open Network): masterchain head seqno.
         "ton" => "getMasterchainInfo",
-        // Sui: reference gas price as a cheap, always-on "tip" probe.
-        "sui" => "suix_getReferenceGasPrice",
+        // Sui: latest checkpoint sequence number as the chain "height" (a
+        // BigInt serialized as a decimal string). We use the legacy `sui_`
+        // alias — public fullnodes (publicnode, zan.top, blockpi) reject the
+        // modern `suix_` spelling of this method. The reference gas price
+        // would also answer, but it is small and non-monotonic, i.e. useless
+        // for lag-based health routing.
+        "sui" => "sui_getLatestCheckpointSequenceNumber",
         _ => "eth_blockNumber",
     }
 }

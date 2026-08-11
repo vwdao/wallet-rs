@@ -1,18 +1,15 @@
 //! Sui chain implementation.
 //!
 //! Sui's public JSON-RPC surface (https://docs.sui.io/sui-api-ref) is regular
-//! JSON-RPC 2.0, but the methods we wire up here are the read-side of the
-//! wallet API only:
+//! JSON-RPC 2.0. Block-level tx syncing is checkpoint-based:
 //!
-//! - `suix_getBalance`            → native MIST balance for an address
-//! - `suix_getCoinBalance`        → token balance (coin type) for an address
-//! - `suix_getReferenceGasPrice`  → tip-side metadata (used as a soft "tip")
-//! - `sui_executeTransactionBlock` → broadcast a signed tx BCS blob (base64)
+//! - `sui_getLatestCheckpointSequenceNumber` → current checkpoint seq (tip)
+//! - `suix_queryTransactionBlocks` → full tx list of a checkpoint (paginated)
+//! - `suix_getReferenceGasPrice` → fee estimation
 //!
-//! Block-level tx syncing (`suix_queryTransactionBlocks`,
-//! `suix_getCheckpoint`) is intentionally not wired — Sui's checkpoint model
-//! is materially different from account chains and is out of scope for the
-//! initial chain-gateway pass.
+//! Sui serializes all `BigInt` values (checkpoint seq, gas price, balances)
+//! as decimal *strings*; the helpers in this module always parse both string
+//! and JSON-number encodings.
 
 use crate::provider::RpcPool;
 use crate::traits::{BalanceReader, BlockSource, GasEstimator, TokenBalance, TxBroadcaster};
@@ -20,6 +17,7 @@ use async_trait::async_trait;
 use base64::Engine as _;
 use rust_decimal::Decimal;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
@@ -82,6 +80,15 @@ impl SuiChain {
         self.pool.mark_success(&url);
         Ok(v.get("result").cloned().unwrap_or(Value::Null))
     }
+}
+
+/// Sui serializes every `BigInt`/`u64` field as a decimal string (e.g.
+/// `"740"` for the reference gas price, `"44123456"` for a checkpoint
+/// sequence). Some providers return a plain JSON number instead; accept both.
+fn parse_bigint(v: &Value) -> Option<u64> {
+    v.as_str()
+        .and_then(|s| s.parse::<u64>().ok())
+        .or_else(|| v.as_u64())
 }
 
 #[async_trait]
@@ -166,102 +173,101 @@ impl TxBroadcaster for SuiChain {
 
 #[async_trait]
 impl BlockSource for SuiChain {
-    /// Sui checkpoints are the canonical "tip" — used as a soft height so the
-    /// chain-gateway can route around lagging endpoints. The actual value
-    /// returned is the reference gas price (small u64) since it is a cheap
-    /// and universally-available RPC. Callers needing a real checkpoint
-    /// number should add a dedicated `suix_getLatestCheckpointSequenceNumber`
-    /// call later.
+    /// Sui's canonical chain head is the latest checkpoint sequence number
+    /// (monotonic, grows to millions). This is what wallet-sync uses for the
+    /// cursor; the reference gas price must NOT be used as a height since it
+    /// is small and non-monotonic.
+    ///
+    /// Most providers expose only the legacy `sui_` alias of this method (a
+    /// common quirk of public fullnodes); fall back to the modern `suix_`
+    /// name for providers that only expose that one.
     async fn tip(&self) -> AppResult<u64> {
-        let result = self.rpc("suix_getReferenceGasPrice", json!({})).await?;
-        Ok(result.as_u64().unwrap_or(0))
+        let result = match self
+            .rpc("sui_getLatestCheckpointSequenceNumber", json!([]))
+            .await
+        {
+            Ok(v) => v,
+            Err(e) if is_method_not_found(&e) => {
+                self.rpc("suix_getLatestCheckpointSequenceNumber", json!([]))
+                    .await?
+            }
+            Err(e) => return Err(e),
+        };
+        parse_bigint(&result).ok_or_else(|| {
+            AppError::Unavailable(
+                "sui_getLatestCheckpointSequenceNumber returned no sequence".into(),
+            )
+        })
     }
 
-    /// Fetch the list of transaction digests in a Sui checkpoint and enrich
-    /// each with `suix_getTransactionBlock` so the rest of the sync pipeline
-    /// can use the same `NormalizedTx` shape as the account-based chains.
+    /// Fetch every transaction in a Sui checkpoint.
     ///
-    /// `height` is interpreted as the checkpoint sequence number
-    /// (`suix_getCheckpoint` accepts it as a positional argument).
+    /// `height` is interpreted as the checkpoint sequence number. We use a
+    /// single paginated `suix_queryTransactionBlocks` filtered by that
+    /// sequence — with `showInput`/`showEffects`/`showBalanceChanges` the
+    /// response already carries the full `SuiTransactionBlockResponse` per tx,
+    /// so there is no need for the (provider-fragile) `suix_getCheckpoint`
+    /// digest lookup or N per-tx `getTransactionBlock` round trips.
     async fn fetch_block_txs(&self, height: u64) -> AppResult<Vec<NormalizedTx>> {
-        // 1. Get the checkpoint by sequence number.
-        let checkpoint = self
-            .rpc("suix_getCheckpoint", json!([height]))
-            .await?;
-        let digest_opt = checkpoint.get("digest").and_then(|d| d.as_str());
-        let digest = match digest_opt {
-            Some(d) => d.to_string(),
-            None => return Ok(Vec::new()),
-        };
-
-        // 2. Pull the digests in the checkpoint (paginated by 50 to stay
-        //    under most providers' request caps).
-        let digests: Vec<String> = self
-            .rpc(
-                "suix_queryTransactionBlocks",
-                json!({
-                    "filter": { "Checkpoint": digest },
-                    "options": { "showInput": false, "showEffects": true },
-                    "limit": 50,
-                }),
-            )
-            .await
-            .and_then(|r| {
-                r.get("data")
-                    .and_then(|d| d.as_array())
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|v| v.get("digest").and_then(|d| d.as_str()))
-                            .map(|s| s.to_string())
-                            .collect()
-                    })
-                    .ok_or_else(|| AppError::Unavailable("missing data array".into()))
-            })?;
-
-        // 3. Resolve each digest in detail. We collect in order so the index
-        //    in the returned Vec matches the position in the checkpoint.
-        let mut out = Vec::with_capacity(digests.len());
-        for (idx, d) in digests.into_iter().enumerate() {
-            match self.fetch_sui_tx(&d, height, idx).await {
-                Ok(tx) => out.push(tx),
-                Err(e) => {
-                    // Don't abort the whole batch on a single miss — the
-                    // chain-gateway already accounts for partial sync via
-                    // `rpc_block_height`.
-                    tracing::warn!(error = %e, digest = %d, "suix_getTransactionBlock failed");
+        let mut out: Vec<NormalizedTx> = Vec::new();
+        let mut next_cursor: Option<String> = None;
+        loop {
+            let mut params = serde_json::json!({
+                "filter": { "Checkpoint": height.to_string() },
+                "options": {
+                    "showInput": true,
+                    "showEffects": true,
+                    "showBalanceChanges": true,
+                },
+                "limit": 50,
+            });
+            if let Some(c) = &next_cursor {
+                params["cursor"] = serde_json::Value::String(c.clone());
+            }
+            let page = self.rpc("suix_queryTransactionBlocks", params).await?;
+            if let Some(data) = page.get("data").and_then(|d| d.as_array()) {
+                for v in data {
+                    let digest = v.get("digest").and_then(|d| d.as_str()).unwrap_or_default();
+                    let tx = parse_sui_tx(digest, height, v);
+                    // Skip txs that moved no coins. Gas-only contract calls
+                    // and system/validator txs aren't transfers and would
+                    // otherwise pollute the transfer history and stats.
+                    if tx.value.raw == rust_decimal::Decimal::ZERO {
+                        continue;
+                    }
+                    out.push(tx);
                 }
+            }
+            let has_next = page
+                .get("hasNextPage")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if !has_next {
+                break;
+            }
+            match page.get("nextCursor").and_then(|v| v.as_str()) {
+                Some(n) if Some(n) != next_cursor.as_deref() => {
+                    next_cursor = Some(n.to_string());
+                }
+                // nextCursor missing or not advancing: stop rather than loop
+                // forever on a provider that doesn't implement pagination.
+                _ => break,
             }
         }
         Ok(out)
     }
 }
 
-impl SuiChain {
-    /// Resolve a single Sui transaction digest into a `NormalizedTx`.
-    async fn fetch_sui_tx(&self, digest: &str, height: u64, idx: usize) -> AppResult<NormalizedTx> {
-        let result = self
-            .rpc(
-                "suix_getTransactionBlock",
-                json!({
-                    "digest": digest,
-                    "options": {
-                        "showInput": true,
-                        "showEffects": true,
-                        "showEvents": false,
-                        "showObjectChanges": false,
-                        "showBalanceChanges": true,
-                    },
-                }),
-            )
-            .await?;
-        // Pure function — the rest of the conversion is in `parse_sui_tx`,
-        // which is also exercised by unit tests with a hand-built JSON.
-        let _ = idx;
-        Ok(parse_sui_tx(digest, height, &result))
-    }
+/// True when the RPC error means the method is not exposed by the endpoint
+/// (JSON-RPC `-32601`), which is how providers signal a missing `sui_`/`suix_`
+/// alias. Used to fall back across the two prefixes.
+fn is_method_not_found(e: &AppError) -> bool {
+    e.to_string().contains("-32601")
 }
 
-/// Convert the JSON shape returned by `suix_getTransactionBlock` into a
+/// Convert a `SuiTransactionBlockResponse` (the shape returned by
+/// `suix_getTransactionBlock` and by each entry of
+/// `suix_queryTransactionBlocks` with the show flags set) into a
 /// `NormalizedTx`. Pure function — no I/O — so it can be tested without
 /// mocking the RPC pool.
 fn parse_sui_tx(digest: &str, height: u64, result: &Value) -> NormalizedTx {
@@ -276,52 +282,165 @@ fn parse_sui_tx(digest: &str, height: u64, result: &Value) -> NormalizedTx {
         .and_then(|v| v.as_str())
         .map(Address::new);
 
-    let mut value = wallet_types::Amount::zero(9);
-    if let Some(changes) = result.get("balanceChanges").and_then(|v| v.as_array()) {
-        let mut negative: i128 = 0;
-        for ch in changes {
-            let owner = ch
-                .pointer("/owner/AddressOwner")
-                .and_then(|v| v.as_str())
-                .or_else(|| ch.pointer("/owner/ObjectOwner").and_then(|v| v.as_str()));
-            if owner.as_deref() == from.as_ref().map(Address::as_str) {
-                if let Some(amount) = ch.get("amount").and_then(|v| v.as_str()) {
-                    if let Ok(n) = amount.parse::<i128>() {
-                        if n < 0 {
-                            negative += n;
-                        }
-                    }
-                }
-            }
-        }
-        if negative < 0 {
-            let abs = (-negative) as u128;
-            value = wallet_types::Amount::new(rust_decimal::Decimal::from(abs), 9);
-        }
-    }
-
     let gas_used = result
         .pointer("/effects/gasUsed/computationCost")
         .and_then(parse_mist_string);
 
-    let method = result
-        .pointer("/transaction/data/transaction")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
+    // `to` / `value` / `contract_address` come from `balanceChanges`: a
+    // transfer is a coin type the sender spent and some other address
+    // received. Gas-only SUI movement is excluded (see `derive_transfer`).
+    let deltas = parse_balance_changes(result);
+    let sender = from.as_ref().map(|a| a.as_str().to_string());
+    let (to, value, contract_address) = match derive_transfer(&deltas, sender.as_deref(), gas_used)
+    {
+        Some((owner, amount, coin_type)) => (
+            Some(Address::new(owner)),
+            // Almost every Sui coin uses 9 decimals (MIST); non-standard
+            // token decimals are not exposed via balanceChanges, so 9 is the
+            // best available default.
+            wallet_types::Amount::new(rust_decimal::Decimal::from(amount.unsigned_abs()), 9),
+            coin_type.map(Address::new),
+        ),
+        None => (None, wallet_types::Amount::zero(9), None),
+    };
+
+    let method = parse_tx_method(result);
 
     NormalizedTx {
         hash: TxHash::new(digest),
         from,
-        to: None,
+        to,
         value,
         gas_fee: gas_used.map(|g| wallet_types::Amount::new(rust_decimal::Decimal::from(g), 9)),
         block_number: height,
         status,
         raw: result.clone(),
-        contract_address: None,
+        contract_address,
         log_index: None,
         method,
     }
+}
+
+/// Extract a human-readable method for a Sui transaction block.
+///
+/// The kind is usually only `"ProgrammableTransaction"`, so the real signal
+/// lives in the PTB command list (`transaction.data.transaction.transactions`).
+/// `MoveCall` commands report `module::function` — the closest Sui analogue
+/// to an EVM method selector (`transfer::transfer`, `token::transfer`, ...);
+/// other commands use their type name (`TransferObjects`, `SplitCoins`,
+/// `MergeCoins`, `Pay`, ...). When only the kind string is available, fall
+/// back to it.
+fn parse_tx_method(result: &Value) -> Option<String> {
+    let tx = result.pointer("/transaction/data/transaction")?;
+    if let Some(s) = tx.as_str() {
+        return Some(s.to_string());
+    }
+    let commands = tx.pointer("/transactions")?.as_array()?;
+    let first = commands.first()?;
+    let (name, _) = first.as_object()?.iter().next()?;
+    let method = match name.as_str() {
+        "MoveCall" => {
+            let module = first.pointer("/MoveCall/module").and_then(|v| v.as_str());
+            let function = first.pointer("/MoveCall/function").and_then(|v| v.as_str());
+            match (module, function) {
+                (Some(m), Some(f)) => format!("{m}::{f}"),
+                _ => name.to_string(),
+            }
+        }
+        other => other.to_string(),
+    };
+    Some(method)
+}
+
+/// One row of a `SuiTransactionBlockResponse.balanceChanges` array.
+struct BalanceDelta {
+    owner: String,
+    amount: i128,
+    coin_type: String,
+}
+
+/// Coin type of the native Sui token. Native-coin transfers keep
+/// `contract_address` empty; every other coin type is a token transfer.
+const SUI_COIN_TYPE: &str = "0x2::sui::SUI";
+
+/// Parse `balanceChanges` into per-coin deltas. Rows without a parseable
+/// owner or amount are dropped — they carry no transfer signal anyway.
+fn parse_balance_changes(result: &Value) -> Vec<BalanceDelta> {
+    result
+        .get("balanceChanges")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|ch| {
+                    let owner = ch
+                        .pointer("/owner/AddressOwner")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| ch.pointer("/owner/ObjectOwner").and_then(|v| v.as_str()));
+                    let amount = ch
+                        .get("amount")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse::<i128>().ok());
+                    let coin_type = ch.get("coinType").and_then(|v| v.as_str());
+                    match (owner, amount, coin_type) {
+                        (Some(o), Some(a), Some(c)) => Some(BalanceDelta {
+                            owner: o.to_string(),
+                            amount: a,
+                            coin_type: c.to_string(),
+                        }),
+                        _ => None,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Pick the primary transfer out of a checkpoint's `balanceChanges`.
+///
+/// Sui reports *every* coin balance delta — including the gas payment to
+/// the validator — as `balanceChanges`. A transfer is a coin type the
+/// sender spent and some other address received. The SUI movement that only
+/// covers the gas fee (`sender`'s SUI spend equals the gas fee) is excluded
+/// so pure contract calls don't masquerade as transfers.
+///
+/// Returns `(to, amount, coin_type)` for the largest qualifying delta, or
+/// `None` when the tx did not move any coins beyond gas (value 0).
+fn derive_transfer(
+    deltas: &[BalanceDelta],
+    sender: Option<&str>,
+    gas_fee: Option<u64>,
+) -> Option<(String, i128, Option<String>)> {
+    // Total amount the sender spent per coin type (negative sums).
+    let mut spent: HashMap<&str, i128> = HashMap::new();
+    for d in deltas {
+        if sender.is_some_and(|s| d.owner == s) && d.amount < 0 {
+            *spent.entry(d.coin_type.as_str()).or_insert(0) += d.amount;
+        }
+    }
+    let gas = gas_fee.map(|g| g as i128);
+    let mut best: Option<(String, i128, Option<String>)> = None;
+    for d in deltas {
+        if d.amount <= 0 || sender.is_some_and(|s| d.owner == s) {
+            continue;
+        }
+        // Only count coin types the sender actually spent (the recipient's
+        // positive delta must be matched by the sender losing the same coin).
+        let spent_amt = spent.get(d.coin_type.as_str()).copied().unwrap_or(0);
+        if spent_amt >= 0 {
+            continue;
+        }
+        // SUI that only pays the gas fee is income to the validator, not a
+        // transfer. With a real native transfer the sender's SUI spend
+        // exceeds the fee (sent amount + gas).
+        if d.coin_type == SUI_COIN_TYPE && gas.is_some_and(|g| spent_amt == -g) {
+            continue;
+        }
+        let contract = (d.coin_type != SUI_COIN_TYPE).then(|| d.coin_type.clone());
+        if best.as_ref().is_none_or(|(_, amt, _)| d.amount > *amt) {
+            best = Some((d.owner.clone(), d.amount, contract));
+        }
+    }
+    best
 }
 
 /// Parse a "12345" / "-123" string into a u64 (negative clamped to 0).
@@ -391,7 +510,7 @@ impl GasEstimator for SuiChain {
 
         let gas_price = gas_price_res
             .ok()
-            .and_then(|v| v.as_u64().map(|n| n as u128));
+            .and_then(|v| parse_bigint(&v).map(|n| n as u128));
 
         let dry = dry_run_res?;
         let status = dry
@@ -445,7 +564,7 @@ impl GasEstimator for SuiChain {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_mist_string, parse_sui_tx, sui_tx_status, SuiChain};
+    use super::{parse_bigint, parse_mist_string, parse_sui_tx, parse_tx_method, sui_tx_status, SuiChain};
     use serde_json::json;
     use wallet_types::{Amount, TxStatus};
 
@@ -481,6 +600,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_bigint_handles_sui_string_and_number() {
+        // Sui returns BigInts as strings; some providers send numbers.
+        assert_eq!(parse_bigint(&json!("44123456")), Some(44123456));
+        assert_eq!(parse_bigint(&json!("740")), Some(740));
+        assert_eq!(parse_bigint(&json!(44123456u64)), Some(44123456));
+        assert_eq!(parse_bigint(&json!(0)), Some(0));
+        assert_eq!(parse_bigint(&json!("-1")), None);
+        assert_eq!(parse_bigint(&json!("not-a-number")), None);
+        assert_eq!(parse_bigint(&json!(null)), None);
+    }
+
+    #[test]
     fn sui_parse_sui_tx_extracts_sender_balance_change_and_ptb_kind() {
         let raw = json!({
             "digest": "abc",
@@ -499,17 +630,85 @@ mod tests {
                 }
             },
             "balanceChanges": [
-                { "owner": { "AddressOwner": "0xsender" }, "amount": "-2500000" },
-                { "owner": { "AddressOwner": "0xother" }, "amount": "2500000" }
+                { "coinType": "0x2::sui::SUI", "amount": "-2500000", "owner": { "AddressOwner": "0xsender" } },
+                { "coinType": "0x2::sui::SUI", "amount": "2500000", "owner": { "AddressOwner": "0xother" } }
             ]
         });
         let tx = parse_sui_tx("abc", 7, &raw);
         assert_eq!(tx.from.as_ref().unwrap().as_str(), "0xsender");
+        assert_eq!(tx.to.as_ref().unwrap().as_str(), "0xother");
+        assert!(tx.contract_address.is_none());
         assert_eq!(tx.value, Amount::new(rust_decimal::Decimal::from(2_500_000u64), 9));
         assert_eq!(tx.gas_fee.as_ref().unwrap().raw, rust_decimal::Decimal::from(1_000_000u64));
         assert_eq!(tx.status, TxStatus::Success);
         assert_eq!(tx.method.as_deref(), Some("ProgrammableTransaction"));
         assert_eq!(tx.block_number, 7);
+    }
+
+    #[test]
+    fn sui_parse_sui_tx_token_transfer_sets_contract_and_value() {
+        let raw = json!({
+            "digest": "abc",
+            "transaction": { "data": { "sender": "0xsender" } },
+            "effects": {
+                "status": { "status": "success" },
+                "gasUsed": { "computationCost": "1000" }
+            },
+            "balanceChanges": [
+                { "coinType": "0x2::sui::SUI", "amount": "-1000", "owner": { "AddressOwner": "0xsender" } },
+                { "coinType": "0x2::sui::SUI", "amount": "1000", "owner": { "AddressOwner": "0xvalidator" } },
+                { "coinType": "0xabc::usdc::USDC", "amount": "-500000", "owner": { "AddressOwner": "0xsender" } },
+                { "coinType": "0xabc::usdc::USDC", "amount": "500000", "owner": { "AddressOwner": "0xrecipient" } }
+            ]
+        });
+        let tx = parse_sui_tx("abc", 7, &raw);
+        assert_eq!(tx.to.as_ref().unwrap().as_str(), "0xrecipient");
+        assert_eq!(tx.contract_address.as_ref().unwrap().as_str(), "0xabc::usdc::USDC");
+        assert_eq!(tx.value, Amount::new(rust_decimal::Decimal::from(500_000u64), 9));
+    }
+
+    #[test]
+    fn sui_parse_sui_tx_gas_only_has_zero_value() {
+        // Pure contract call: the sender's only SUI movement is the gas fee,
+        // so no transfer is derived and value stays 0 (filtered by the syncer).
+        let raw = json!({
+            "digest": "abc",
+            "transaction": { "data": { "sender": "0xsender" } },
+            "effects": {
+                "status": { "status": "success" },
+                "gasUsed": { "computationCost": "1000" }
+            },
+            "balanceChanges": [
+                { "coinType": "0x2::sui::SUI", "amount": "-1000", "owner": { "AddressOwner": "0xsender" } },
+                { "coinType": "0x2::sui::SUI", "amount": "1000", "owner": { "AddressOwner": "0xvalidator" } }
+            ]
+        });
+        let tx = parse_sui_tx("abc", 7, &raw);
+        assert_eq!(tx.value.raw, rust_decimal::Decimal::ZERO);
+        assert!(tx.to.is_none());
+        assert!(tx.contract_address.is_none());
+    }
+
+    #[test]
+    fn sui_parse_sui_tx_native_transfer_ignores_gas_income() {
+        // Native SUI transfer with gas: recipient's +2000 is the transfer,
+        // validator's +1000 is gas-only and must not become `to`.
+        let raw = json!({
+            "digest": "abc",
+            "transaction": { "data": { "sender": "0xsender" } },
+            "effects": {
+                "status": { "status": "success" },
+                "gasUsed": { "computationCost": "1000" }
+            },
+            "balanceChanges": [
+                { "coinType": "0x2::sui::SUI", "amount": "-3000", "owner": { "AddressOwner": "0xsender" } },
+                { "coinType": "0x2::sui::SUI", "amount": "2000", "owner": { "AddressOwner": "0xrecipient" } },
+                { "coinType": "0x2::sui::SUI", "amount": "1000", "owner": { "AddressOwner": "0xvalidator" } }
+            ]
+        });
+        let tx = parse_sui_tx("abc", 7, &raw);
+        assert_eq!(tx.to.as_ref().unwrap().as_str(), "0xrecipient");
+        assert_eq!(tx.value, Amount::new(rust_decimal::Decimal::from(2_000u64), 9));
     }
 
     #[test]
@@ -521,6 +720,53 @@ mod tests {
         });
         let tx = parse_sui_tx("x", 1, &raw);
         assert_eq!(tx.status, TxStatus::Failed);
+    }
+
+    #[test]
+    fn sui_parse_tx_method_uses_ptb_command_names() {
+        let raw = json!({
+            "transaction": {
+                "data": {
+                    "transaction": {
+                        "kind": "ProgrammableTransaction",
+                        "inputs": [],
+                        "transactions": [
+                            { "TransferObjects": { "objects": [{ "Input": 0 }], "address": { "Input": 1 } } },
+                            { "SplitCoins": { "coin": { "Input": 0 }, "amounts": [{ "Input": 1 }] } }
+                        ]
+                    }
+                }
+            }
+        });
+        assert_eq!(parse_tx_method(&raw).as_deref(), Some("TransferObjects"));
+    }
+
+    #[test]
+    fn sui_parse_tx_method_move_call_uses_module_function() {
+        let raw = json!({
+            "transaction": {
+                "data": {
+                    "transaction": {
+                        "kind": "ProgrammableTransaction",
+                        "inputs": [],
+                        "transactions": [
+                            { "MoveCall": { "package": "0x2", "module": "transfer", "function": "transfer" } }
+                        ]
+                    }
+                }
+            }
+        });
+        assert_eq!(parse_tx_method(&raw).as_deref(), Some("transfer::transfer"));
+    }
+
+    #[test]
+    fn sui_parse_tx_method_falls_back_to_kind_string() {
+        let raw = json!({
+            "transaction": {
+                "data": { "transaction": "ProgrammableTransaction" }
+            }
+        });
+        assert_eq!(parse_tx_method(&raw).as_deref(), Some("ProgrammableTransaction"));
     }
 
     #[test]

@@ -29,6 +29,32 @@ mod pg_ty {
     pub const JSONB: Type = Type::Document { binary: true };
 }
 
+/// Postgres `text`/`jsonb` cannot store NUL bytes (`\u0000`): even the
+/// escaped form in a JSON document is rejected with "unsupported Unicode
+/// escape sequence". Sui (and other families) can carry NUL inside string
+/// fields, so strip it at the persistence boundary and replace it with
+/// U+FFFD rather than aborting a whole batch. Replaces `\0` with `\u{FFFD}`.
+fn sanitize_text(s: &str) -> String {
+    s.chars()
+        .map(|c| if c == '\0' { '\u{FFFD}' } else { c })
+        .collect()
+}
+
+/// Recursively sanitize a JSON tree before it is stored in a `jsonb` column.
+fn sanitize_json(v: serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match v {
+        Value::String(s) => Value::String(sanitize_text(&s)),
+        Value::Array(items) => Value::Array(items.into_iter().map(sanitize_json).collect()),
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(k, v)| (k, sanitize_json(v)))
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
 pub struct TransactionRepo<'a> {
     db: &'a Db,
 }
@@ -99,6 +125,8 @@ impl<'a> TransactionRepo<'a> {
         let status = tx.status.as_str();
         let contract = tx.contract_address.as_ref().map(|c| c.as_str().to_string());
         let log_index = tx.log_index.map(|i| i as i64);
+        let method = tx.method.as_ref().map(|m| sanitize_text(m));
+        let raw = sanitize_json(tx.raw.clone());
 
         let mut filter = Tx::fields()
             .chain_index()
@@ -130,8 +158,8 @@ impl<'a> TransactionRepo<'a> {
                 status: status,
                 contract_address: contract,
                 log_index: log_index,
-                method: tx.method.clone(),
-                raw: tx.raw.clone(),
+                method: method,
+                raw: raw,
             })
             .exec(&mut db)
             .await
@@ -148,8 +176,8 @@ impl<'a> TransactionRepo<'a> {
                 .status(status)
                 .contract_address(contract)
                 .log_index(log_index)
-                .method(tx.method.clone())
-                .raw(tx.raw.clone())
+                .method(method)
+                .raw(raw)
                 .exec(&mut db)
                 .await
                 .map_err(|e| AppError::internal(e.to_string()))?;
@@ -243,8 +271,9 @@ async fn upsert_chunk(
         // nullable column goes through `bind_typed` with the column's real
         // Postgres type. Non-nullable columns still use plain `bind` so the
         // driver can keep doing its own type inference.
-        let raw_json = serde_json::to_string(&tx.raw)
+        let raw_json = serde_json::to_string(&sanitize_json(tx.raw.clone()))
             .map_err(|e| AppError::internal(format!("serialize tx.raw: {e}")))?;
+        let method = tx.method.as_deref().map(sanitize_text);
         // The id is discarded on conflict (the existing row keeps its own
         // UUID), but it is required for the INSERT to satisfy the NOT NULL
         // constraint on first-time writes.
@@ -261,7 +290,7 @@ async fn upsert_chunk(
             .bind(tx.status.as_str())
             .bind_optional_text(contract.as_deref())
             .bind_optional_i64(log_index)
-            .bind_optional_text(tx.method.as_deref())
+            .bind_optional_text(method.as_deref())
             .bind_typed(toasty::stmt::Value::String(raw_json), pg_ty::JSONB);
     }
     stmt.exec(db).await.map_err(|e| AppError::internal(e.to_string()))?;
@@ -300,3 +329,38 @@ impl BindOptional for toasty::sql::Statement {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn sanitize_text_removes_nul() {
+        assert_eq!(sanitize_text("hello\0world"), "hello\u{FFFD}world");
+        assert_eq!(sanitize_text("no-nul"), "no-nul");
+        assert_eq!(sanitize_text("\0"), "\u{FFFD}");
+        assert_eq!(sanitize_text(""), "");
+    }
+
+    #[test]
+    fn sanitize_json_strips_nul_recursively() {
+        let v = json!({
+            "s": "a\0b",
+            "n": 42,
+            "b": true,
+            "arr": ["x\0", 1, null],
+            "obj": { "deep": "y\0z" }
+        });
+        let out = sanitize_json(v);
+        assert_eq!(out["s"], "a\u{FFFD}b");
+        assert_eq!(out["n"], 42);
+        assert_eq!(out["b"], true);
+        assert_eq!(out["arr"][0], "x\u{FFFD}");
+        assert_eq!(out["obj"]["deep"], "y\u{FFFD}z");
+        // The serialized form must not contain a \u0000 escape.
+        let serialized = serde_json::to_string(&out).unwrap();
+        assert!(!serialized.contains("\\u0000"));
+    }
+}
+

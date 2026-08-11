@@ -8,6 +8,7 @@ import { Badge } from './ui/Badge.jsx'
 import { Button } from './ui/Button.jsx'
 import { ConfirmDialog } from './ui/ConfirmDialog.jsx'
 import { Empty } from './ui/Empty.jsx'
+import { UrlTooltip } from './ui/UrlTooltip.jsx'
 
 const PROTOCOL_OPTIONS = [
   { value: 'http', label: 'http' },
@@ -28,6 +29,8 @@ export function EndpointsPanel({ api }) {
   const [pendingDelete, setPendingDelete] = useState(null)
   const [togglingId, setTogglingId] = useState(null)
   const [networks, setNetworks] = useState([])
+  const [urlTip, setUrlTip] = useState(null)
+  const [copiedId, setCopiedId] = useState(null)
 
   useEffect(() => {
     api('/admin/networks')
@@ -144,6 +147,29 @@ export function EndpointsPanel({ api }) {
     }
   }
 
+  async function copyUrl(endpoint) {
+    const text = endpoint.url
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      try {
+        document.execCommand('copy')
+      } finally {
+        document.body.removeChild(textarea)
+      }
+    }
+    setCopiedId(endpoint.id)
+    window.setTimeout(() => {
+      setCopiedId((current) => (current === endpoint.id ? null : current))
+    }, 1600)
+  }
+
   return (
     <>
       <div className="toolbar">
@@ -213,7 +239,16 @@ export function EndpointsPanel({ api }) {
               {filteredEndpoints.map((endpoint) => (
                 <tr key={endpoint.id}>
                   <td><Badge>{chainName(endpoint.chain_index)}</Badge></td>
-                  <td className="url" title={endpoint.url}>{endpoint.url}</td>
+                  <td
+                    className={`url${copiedId === endpoint.id ? ' copied' : ''}`}
+                    onMouseMove={(event) =>
+                      setUrlTip({ x: event.clientX, y: event.clientY, url: endpoint.url })
+                    }
+                    onMouseLeave={() => setUrlTip(null)}
+                    onClick={() => copyUrl(endpoint)}
+                  >
+                    {copiedId === endpoint.id ? '已复制 ✓' : endpoint.url}
+                  </td>
                   <td>{normalizeProtocol(endpoint.protocol, endpoint.url) || '自动'}</td>
                   <td>
                     <Badge tone={endpoint.tier === 'paid' ? 'yellow' : 'green'}>
@@ -276,6 +311,8 @@ export function EndpointsPanel({ api }) {
           </table>
         </div>
       )}
+
+      <UrlTooltip x={urlTip?.x} y={urlTip?.y} url={urlTip?.url} />
 
       <EndpointModal
         open={modalOpen}
