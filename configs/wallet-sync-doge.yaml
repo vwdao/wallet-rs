@@ -1,0 +1,25 @@
+poll_interval_ms: 1000
+# start_height: 0  # optional backfill start (first block to sync on a fresh DB)
+# How many blocks to fetch from the RPC in parallel per tick. Tune to
+# roughly the number of healthy endpoints you have, or whatever the
+# gateway's per-endpoint QPS ceiling allows.
+block_fetch_concurrency: 4
+database:
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+redis:
+  url: "redis://127.0.0.1:6379"
+nats:
+  url: "nats://127.0.0.1:4222"
+chain:
+  chain_index: 3
+  # DOGE runs a Bitcoin-Core-compatible JSON-RPC, so it shares the `bitcoin`
+  # family protocol (getblockcount/getblock verbosity 3/estimatesmartfee/...).
+  family: bitcoin
+  # Dogecoin targets a 1-minute block; 12 confirmations ≈ 12 minutes.
+  confirmations: 12
+  endpoints:
+    # chain-gateway routes `/rpc/doge/...` to dogecoin JSON-RPC nodes.
+    # The default `gw_xxx` token is the gateway-issued tenant id; rotate in
+    # production.
+    - url: "http://127.0.0.1:8545/rpc/doge/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+      weight: 1

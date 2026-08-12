@@ -1,0 +1,22 @@
+poll_interval_ms: 30000
+# start_height: 0  # optional backfill start (first block to sync on a fresh DB)
+# How many blocks to fetch from the RPC in parallel per tick. Zcash emits a
+# block roughly every 75s, so a low concurrency is plenty.
+block_fetch_concurrency: 4
+database:
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+redis:
+  url: "redis://127.0.0.1:6379"
+nats:
+  url: "nats://127.0.0.1:4222"
+chain:
+  chain_index: 133
+  family: zcash
+  # Zcash blocks finalize quickly (75s target); 12 confirmations ≈ 15 minutes.
+  confirmations: 12
+  endpoints:
+    # chain-gateway routes `/rpc/zec/...` to zcashd-compatible RPC nodes.
+    # The default `gw_xxx` token is the gateway-issued tenant id; rotate in
+    # production.
+    - url: "http://127.0.0.1:8545/rpc/zec/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+      weight: 1

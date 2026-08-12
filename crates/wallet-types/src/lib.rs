@@ -49,6 +49,10 @@ pub enum ChainFamily {
     Bitcoin,
     Tron,
     UtxoOther,
+    /// Zcash. JSON-RPC is zcashd/Bitcoin-compatible, but `getblock` only
+    /// supports verbosity 2 (no `prevout`), and shielded transactions are not
+    /// addressable — only transparent (t-addr) transfers are indexed.
+    Zcash,
     /// TON (The Open Network). JSON-RPC uses the v3 API shape.
     Ton,
     /// Sui. JSON-RPC uses the Sui JSON-RPC shape.
@@ -69,7 +73,8 @@ impl ChainFamily {
             | ChainIndex::ROBINHOOD => Some(Self::Evm),
             ChainIndex::SOL => Some(Self::Solana),
             ChainIndex::BTC => Some(Self::Bitcoin),
-            ChainIndex::DOGE | ChainIndex::ZCASH => Some(Self::UtxoOther),
+            ChainIndex::DOGE => Some(Self::UtxoOther),
+            ChainIndex::ZCASH => Some(Self::Zcash),
             ChainIndex::TRON => Some(Self::Tron),
             ChainIndex::TON => Some(Self::Ton),
             ChainIndex::SUI => Some(Self::Sui),
@@ -79,13 +84,16 @@ impl ChainFamily {
 
     /// Canonical string form used across the platform (DB rows, gateway
     /// probing, sync parsers). UTXO-family chains other than Bitcoin share the
-    /// `bitcoin` protocol semantics (no EVM-style JSON-RPC).
+    /// `bitcoin` protocol semantics (no EVM-style JSON-RPC). Zcash is a
+    /// separate family: its zcashd RPC diverges from Bitcoin Core (verbosity-2
+    /// `getblock`, no `prevout`, shielded txs).
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Evm => "evm",
             Self::Solana => "solana",
             Self::Bitcoin | Self::UtxoOther => "bitcoin",
             Self::Tron => "tron",
+            Self::Zcash => "zcash",
             Self::Ton => "ton",
             Self::Sui => "sui",
         }
@@ -196,9 +204,12 @@ pub struct NormalizedTx {
     /// Token contract / mint address for token transfers (ERC20, SPL, TRC20);
     /// `None` for native transfers.
     pub contract_address: Option<Address>,
-    /// Log index within the tx that produced this record; disambiguates
-    /// multiple records sharing the same tx hash and contract.
-    pub log_index: Option<u64>,
+    /// Index that disambiguates multiple records sharing the same tx hash and
+    /// contract. For EVM/TRC20 this is the event `logIndex`. UTXO-family
+    /// chains reuse it as the `vout` index for output records and a *negative*
+    /// `-(vin_pos + 2)` for input/spend records, so both directions coexist
+    /// under the `(chain_index, hash, contract_address, log_index)` unique key.
+    pub log_index: Option<i64>,
     /// Method/selector that triggered the transfer (e.g. `transfer`,
     /// `transferFrom`, `approve`, or a raw 4-byte selector).
     pub method: Option<String>,

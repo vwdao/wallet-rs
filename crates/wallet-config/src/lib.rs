@@ -253,5 +253,21 @@ mod tests {
             .expect("wallet-sync-tron.yaml must deserialize");
         assert_eq!(tron.chain.chain_index, 195);
         assert_eq!(tron.chain.family, "tron");
+
+        let zec: SyncConfig = load_yaml("../../configs/wallet-sync-zec.yaml")
+            .expect("wallet-sync-zec.yaml must deserialize");
+        assert_eq!(zec.chain.chain_index, 133);
+        assert_eq!(zec.chain.family, "zcash");
+        assert_eq!(zec.chain.confirmations, 12);
+        assert!(!zec.chain.endpoints.is_empty());
+
+        // DOGE (chain_index 3) shares the `bitcoin` family protocol, so the
+        // family string must stay "bitcoin" and chain_index 3.
+        let doge: SyncConfig = load_yaml("../../configs/wallet-sync-doge.yaml")
+            .expect("wallet-sync-doge.yaml must deserialize");
+        assert_eq!(doge.chain.chain_index, 3);
+        assert_eq!(doge.chain.family, "bitcoin");
+        assert_eq!(doge.chain.confirmations, 12);
+        assert!(!doge.chain.endpoints.is_empty());
     }
 }

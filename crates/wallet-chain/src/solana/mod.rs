@@ -334,7 +334,7 @@ fn solana_native_transfers(
             status,
             raw: json!({ "signature": sig, "type": "native_transfer" }),
             contract_address: None,
-            log_index: Some(*seq),
+            log_index: Some(*seq as i64),
             method: Some("native_transfer".to_string()),
         });
         *seq += 1;
@@ -421,7 +421,7 @@ fn solana_native_transfers(
                 status,
                 raw: json!({ "signature": sig, "type": "native_transfer" }),
                 contract_address: None,
-                log_index: Some(seq),
+                log_index: Some(seq as i64),
                 method: Some("native_transfer".to_string()),
             });
             seq += 1;
@@ -440,7 +440,7 @@ fn solana_native_transfers(
             status,
             raw: json!({ "signature": sig, "type": "native_transfer" }),
             contract_address: None,
-            log_index: Some(seq),
+            log_index: Some(seq as i64),
             method: Some("native_transfer".to_string()),
         });
         seq += 1;
@@ -651,7 +651,7 @@ fn solana_token_transfers(
                     status,
                     raw: json!({ "signature": sig, "mint": mint.clone(), "type": "spl_burn" }),
                     contract_address: Some(Address::new(mint.clone())),
-                    log_index: Some(seq),
+                    log_index: Some(seq as i64),
                     method: Some("spl_burn".to_string()),
                 });
                 seq += 1;
@@ -671,7 +671,7 @@ fn solana_token_transfers(
                     status,
                     raw: json!({ "signature": sig, "mint": mint.clone(), "type": "spl_mint" }),
                     contract_address: Some(Address::new(mint.clone())),
-                    log_index: Some(seq),
+                    log_index: Some(seq as i64),
                     method: Some("spl_mint".to_string()),
                 });
                 seq += 1;
@@ -689,7 +689,7 @@ fn solana_token_transfers(
                 status,
                 raw: json!({ "signature": sig, "mint": mint.clone(), "type": "spl_transfer" }),
                 contract_address: Some(Address::new(mint.clone())),
-                log_index: Some(seq),
+                log_index: Some(seq as i64),
                 method: Some("spl_transfer".to_string()),
             });
             seq += 1;

@@ -543,7 +543,9 @@ pub fn tx_from_row(t: wallet_db::TxRow) -> Transaction {
         status: t.status,
         contract_address: t.contract_address.unwrap_or_default(),
         method: t.method.unwrap_or_default(),
-        log_index: t.log_index.map(|i| i as u64).unwrap_or_default(),
+        // Input/spend records use negative `log_index` (UTXO chains); they are
+        // internal record discriminators and are not surfaced to API clients.
+        log_index: t.log_index.filter(|&i| i >= 0).map(|i| i as u64).unwrap_or_default(),
         gas_fee: t.gas_fee.map(|g| g.to_string()).unwrap_or_default(),
     }
 }

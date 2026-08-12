@@ -120,6 +120,8 @@ fn parse_block_height(result: &Value, family: &str) -> Option<i64> {
             i64::from_str_radix(hex, 16).ok()
         }
         "bitcoin" => result.as_i64(),
+        // Zcash reports a plain integer block count like Bitcoin.
+        "zcash" => result.as_i64(),
         "solana" => result
             .as_i64()
             .or_else(|| result.get("value").and_then(|v| v.as_i64())),

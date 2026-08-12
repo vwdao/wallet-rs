@@ -1,6 +1,6 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use wallet_db::RpcEndpoint;
-use wallet_error::AppResult;
+use wallet_error::{AppError, AppResult};
 
 use crate::protocol::EndpointProtocol;
 use crate::settings::SettingsHandle;
@@ -65,6 +65,8 @@ pub fn probe_method_for_chain(family: &str) -> &str {
         "evm" => "eth_blockNumber",
         "solana" => "getSlot",
         "bitcoin" => "getblockcount",
+        // Zcash (`zcashd`): Bitcoin-compatible block count.
+        "zcash" => "getblockcount",
         "tron" => "getnowblock",
         // TON (The Open Network): masterchain head seqno.
         "ton" => "getMasterchainInfo",
@@ -94,6 +96,11 @@ pub struct HealthChecker {
     interval: Duration,
     settings: SettingsHandle,
     consecutive_lag: std::collections::HashMap<String, u32>,
+    /// Endpoints inside a rate-limit backoff window (url → when probing may
+    /// resume). A 429 from a free/public provider (e.g. Tatum) is transient:
+    /// we stop probing for a few cycles rather than burning its quota on our
+    /// own health checks and marking it unhealthy.
+    rate_limited_until: std::collections::HashMap<String, Instant>,
 }
 
 impl HealthChecker {
@@ -109,6 +116,7 @@ impl HealthChecker {
             interval,
             settings,
             consecutive_lag: std::collections::HashMap::new(),
+            rate_limited_until: std::collections::HashMap::new(),
         }
     }
 
@@ -149,7 +157,21 @@ impl HealthChecker {
         let mut seen_healthy: std::collections::HashSet<String> =
             std::collections::HashSet::new();
 
+        let now = Instant::now();
+        self.rate_limited_until
+            .retain(|_, until| *until > now);
+
         for ep in endpoints.iter_mut() {
+            // Skip endpoints in a rate-limit backoff window: the node is up but
+            // throttled, and every probe we send makes it harder for real
+            // traffic to get through.
+            if self
+                .rate_limited_until
+                .get(&ep.url)
+                .is_some_and(|until| now < *until)
+            {
+                continue;
+            }
             let family = family_map
                 .get(&ep.chain_index)
                 .map(|s| s.as_str())
@@ -192,6 +214,7 @@ impl HealthChecker {
             let mut db = self.db.clone_inner();
             match result {
                 Ok((latency, block_height)) => {
+                    self.rate_limited_until.remove(&ep.url);
                     let new_avg = match ep.avg_latency_ms {
                         Some(prev) => (prev + latency) / 2,
                         None => latency,
@@ -242,6 +265,28 @@ impl HealthChecker {
                     if let Some(h) = block_height {
                         chain_heights.entry(chain_index).or_default().push(h);
                     }
+                }
+                Err(AppError::TooManyRequests) => {
+                    // Rate-limited (a free/public gateway over its per-minute
+                    // quota). The endpoint is alive — throttling is transient —
+                    // so keep it healthy and in rotation instead of burning the
+                    // failure budget, otherwise one throttle window takes the
+                    // whole chain down (503 for every proxied request). Back off
+                    // probing it for a few cycles to avoid self-inflicting 429s.
+                    self.rate_limited_until.insert(
+                        ep.url.clone(),
+                        Instant::now() + self.interval.saturating_mul(4),
+                    );
+                    ep.update()
+                        .last_health_check(Some(jiff::Timestamp::now()))
+                        .exec(&mut db)
+                        .await
+                        .map_err(|e| wallet_error::AppError::internal(e.to_string()))?;
+                    tracing::debug!(
+                        endpoint = %ep.url,
+                        chain = ep.chain_index,
+                        "rpc endpoint rate-limited (429), staying healthy"
+                    );
                 }
                 Err(_) => {
                     let new_err_count = ep.error_count + 1;
@@ -367,7 +412,7 @@ mod tests {
 
     #[test]
     fn non_solana_probe_params_are_empty() {
-        for family in ["evm", "bitcoin", "tron", "unknown"] {
+        for family in ["evm", "bitcoin", "zcash", "tron", "unknown"] {
             assert_eq!(probe_params_for_chain(family), json!([]), "family={family}");
         }
     }

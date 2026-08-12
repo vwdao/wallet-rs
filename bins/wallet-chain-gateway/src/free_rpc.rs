@@ -85,6 +85,7 @@ impl FreeRpcSyncer {
             "solana" => self.sync_solana_network(network).await,
             "ton" => self.sync_ton_network(network).await,
             "sui" => self.sync_sui_network(network).await,
+            "zcash" => self.sync_zcash_network(network).await,
             _ => Ok(ChainSyncResult {
                 chain_index: network.chain_index,
                 family: network.family.clone(),
@@ -93,7 +94,7 @@ impl FreeRpcSyncer {
                 inserted: 0,
                 updated: 0,
                 skipped: 0,
-                message: Some("当前仅自动导入 EVM、Solana、TON、Sui 的免费 RPC".into()),
+                message: Some("当前仅自动导入 EVM、Solana、TON、Sui、Zcash 的免费 RPC".into()),
             }),
         }
     }
@@ -209,6 +210,25 @@ impl FreeRpcSyncer {
             });
         }
         let verified = verify_sui_candidates(self.http.clone(), candidates).await;
+        self.upsert_endpoints(network, "builtin", verified, None)
+            .await
+    }
+
+    async fn sync_zcash_network(&self, network: &Network) -> AppResult<ChainSyncResult> {
+        let candidates = default_zcash_rpcs();
+        if candidates.is_empty() {
+            return Ok(ChainSyncResult {
+                chain_index: network.chain_index,
+                family: network.family.clone(),
+                source: "builtin".into(),
+                discovered: 0,
+                inserted: 0,
+                updated: 0,
+                skipped: 0,
+                message: Some("当前没有 Zcash 的内置免费 RPC".into()),
+            });
+        }
+        let verified = verify_zcash_candidates(self.http.clone(), candidates).await;
         self.upsert_endpoints(network, "builtin", verified, None)
             .await
     }
@@ -431,6 +451,30 @@ async fn verify_sui_candidates(http: Client, urls: Vec<String>) -> Vec<String> {
     verified
 }
 
+async fn verify_zcash_candidates(http: Client, urls: Vec<String>) -> Vec<String> {
+    let mut tasks = JoinSet::new();
+    for url in urls {
+        let client = http.clone();
+        tasks.spawn(async move {
+            if verify_zcash_endpoint(client, &url).await {
+                Some(url)
+            } else {
+                None
+            }
+        });
+    }
+
+    let mut verified = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        if let Ok(Some(url)) = result {
+            verified.push(url);
+        }
+    }
+    verified.sort();
+    verified.dedup();
+    verified
+}
+
 async fn verify_evm_endpoint(http: Client, url: &str, expected_chain_id: u64) -> bool {
     let body = serde_json::json!({
         "jsonrpc": "2.0",
@@ -559,6 +603,38 @@ async fn verify_sui_endpoint(http: Client, url: &str) -> bool {
         .is_some()
 }
 
+async fn verify_zcash_endpoint(http: Client, url: &str) -> bool {
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getblockcount",
+        "params": crate::health::probe_params_for_chain("zcash"),
+    });
+    let Ok(resp) = http
+        .post(url)
+        .json(&body)
+        .timeout(std::time::Duration::from_secs(4))
+        .send()
+        .await
+    else {
+        return false;
+    };
+
+    if !resp.status().is_success() {
+        return false;
+    }
+
+    let Ok(value) = resp.json::<serde_json::Value>().await else {
+        return false;
+    };
+    // A healthy Zcash endpoint reports the current block count as an integer;
+    // a `null`/absent result means the node is not serving the chain.
+    value
+        .get("result")
+        .and_then(|v| v.as_u64().or_else(|| v.as_i64().and_then(|n| u64::try_from(n).ok())))
+        .is_some()
+}
+
 fn default_solana_rpcs(chain_index: i64) -> Vec<String> {
     let urls = match chain_index {
         501 => vec![
@@ -598,6 +674,18 @@ fn default_sui_rpcs() -> Vec<String> {
     .into_iter()
     .filter_map(normalize_rpc_url)
     .collect()
+}
+
+/// Default Zcash (ZEC) mainnet JSON-RPC endpoints.
+///
+/// Zcash public JSON-RPC is scarce: most providers (GetBlock, NOWNodes,
+/// QuickNode, BlockPI) are API-key-gated, and `lightwalletd` is gRPC-only.
+/// Tatum's mainnet gateway is the well-known key-less public endpoint.
+fn default_zcash_rpcs() -> Vec<String> {
+    ["https://zcash-mainnet.gateway.tatum.io"]
+        .into_iter()
+        .filter_map(normalize_rpc_url)
+        .collect()
 }
 
 fn is_acceptable_chainlist_rpc(url: &str, tracking: Option<&str>) -> bool {

@@ -6,6 +6,8 @@ mod traits;
 
 #[cfg(feature = "bitcoin")]
 pub mod bitcoin;
+#[cfg(feature = "zcash")]
+pub mod zcash;
 #[cfg(feature = "evm")]
 pub mod evm;
 #[cfg(feature = "solana")]
@@ -37,6 +39,7 @@ pub fn build_registry(chains: &[ChainRuntimeConfig]) -> AppResult<ChainRegistry>
             "evm" => ChainFamily::Evm,
             "solana" => ChainFamily::Solana,
             "bitcoin" => ChainFamily::Bitcoin,
+            "zcash" => ChainFamily::Zcash,
             "tron" => ChainFamily::Tron,
             "ton" => ChainFamily::Ton,
             "sui" => ChainFamily::Sui,
@@ -53,6 +56,8 @@ pub fn build_registry(chains: &[ChainRuntimeConfig]) -> AppResult<ChainRegistry>
             ChainFamily::Solana => ChainHandle::Solana(solana::SolanaChain::new(cfg)?),
             #[cfg(feature = "bitcoin")]
             ChainFamily::Bitcoin => ChainHandle::Bitcoin(bitcoin::BitcoinChain::new(cfg)?),
+            #[cfg(feature = "zcash")]
+            ChainFamily::Zcash => ChainHandle::Zcash(zcash::ZcashChain::new(cfg)?),
             #[cfg(feature = "tron")]
             ChainFamily::Tron => ChainHandle::Tron(tron::TronChain::new(cfg)?),
             #[cfg(feature = "ton")]

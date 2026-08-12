@@ -131,7 +131,7 @@ impl EvmChain {
                 status: TxStatus::Success,
                 raw: json!({ "internal": true, "trace_index": i }),
                 contract_address: None,
-                log_index: Some(i as u64),
+                log_index: Some(i as i64),
                 method: Some("internal_transfer".to_string()),
             })
             .collect()

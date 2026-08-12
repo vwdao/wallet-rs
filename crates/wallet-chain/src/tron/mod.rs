@@ -440,7 +440,7 @@ fn parse_trc20_logs(
             status: TxStatus::Success,
             raw: json!({ "log": log, "logIndex": idx }),
             contract_address: Some(contract),
-            log_index,
+            log_index: log_index.map(|i| i as i64),
             // Rows derived from a TRC20 `Transfer(address,address,uint256)`
             // event; the method is the event itself regardless of the tx data.
             method: Some("transfer".to_string()),

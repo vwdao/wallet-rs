@@ -85,6 +85,13 @@ pub struct RpcRouter {
     http: reqwest::Client,
     cache: DashMap<i64, ChainEndpoints>,
     circuits: DashMap<String, Arc<EndpointCircuit>>,
+    /// Endpoints inside a rate-limit backoff window (url → when they may be
+    /// selected again). A 429 from a free/public gateway (e.g. Tatum) is a
+    /// transient quota hit, not a dead node: we take the endpoint out of
+    /// rotation for a short window so the burst is absorbed by the remaining
+    /// healthy peers instead of hammering the throttled one and tripping its
+    /// circuit breaker.
+    rate_limited_until: DashMap<String, Instant>,
     failure_threshold: u32,
     cache_ttl: Duration,
 }
@@ -96,6 +103,7 @@ impl RpcRouter {
             http,
             cache: DashMap::new(),
             circuits: DashMap::new(),
+            rate_limited_until: DashMap::new(),
             failure_threshold,
             cache_ttl: Duration::from_secs(15),
         }
@@ -223,6 +231,16 @@ impl RpcRouter {
                         return false;
                     }
                 }
+                // Skip endpoints currently in a rate-limit backoff window:
+                // they are alive but throttled, and selecting them again just
+                // burns the next retry on another 429.
+                if self
+                    .rate_limited_until
+                    .get(&ep.url)
+                    .is_some_and(|until| Instant::now() < *until)
+                {
+                    return false;
+                }
                 let circuit = self
                     .circuits
                     .entry(ep.url.clone())
@@ -320,6 +338,19 @@ impl RpcRouter {
         }
     }
 
+    /// True when any endpoint currently cached for the chain sits inside a
+    /// rate-limit backoff window — i.e. the chain is throttled, not down.
+    fn chain_has_rate_limited(&self, chain_index: i64) -> bool {
+        let Some(cached) = self.cache.get(&chain_index) else {
+            return false;
+        };
+        cached.endpoints.iter().any(|ep| {
+            self.rate_limited_until
+                .get(&ep.url)
+                .is_some_and(|until| Instant::now() < *until)
+        })
+    }
+
     pub fn mark_failure(&self, url: &str) {
         if let Some(circuit) = self.circuits.get(url) {
             circuit.on_failure();
@@ -350,6 +381,12 @@ impl RpcRouter {
                 .await
             {
                 Ok(s) => s,
+                // No healthy peer is selectable. Distinguish a quota-exhausted
+                // chain (peers alive but throttled) from a genuinely dead one
+                // so callers get a 429 instead of a misleading 503.
+                Err(_) if self.chain_has_rate_limited(chain_index) => {
+                    return Err(AppError::TooManyRequests);
+                }
                 Err(e) => return Err(e),
             };
             let url = &selection.url;
@@ -375,6 +412,20 @@ impl RpcRouter {
                 Ok(v) => {
                     self.mark_success(url);
                     return Ok((url.clone(), v));
+                }
+                // A rate-limited endpoint (429, common on free/public gateways
+                // like Tatum) is alive — throttling is transient. NEVER count
+                // it against the circuit breaker: the health checker treats
+                // 429 identically (keep healthy, back off probing), so if a
+                // burst exhausts the per-minute quota, tripping the breaker
+                // here would take the whole chain down with instant 503s
+                // (upstream_url: null, latency ~0) until the cool-down
+                // expires. Instead, park the endpoint in a short rate-limit
+                // window and let the next retry pick another healthy peer.
+                Err(e) if matches!(e, AppError::TooManyRequests) => {
+                    self.rate_limited_until
+                        .insert(url.clone(), Instant::now() + Duration::from_secs(30));
+                    last_err = Some(e);
                 }
                 Err(e) => {
                     self.mark_failure(url);

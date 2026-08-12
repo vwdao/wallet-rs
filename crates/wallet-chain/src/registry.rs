@@ -1,7 +1,7 @@
 use crate::traits::{
     BalanceReader, BlockSource, GasEstimator, NonceProvider, TokenBalance, TxBroadcaster,
 };
-use crate::{bitcoin, evm, solana, sui, ton, tron};
+use crate::{bitcoin, evm, solana, sui, ton, tron, zcash};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,6 +18,8 @@ pub enum ChainHandle {
     Solana(Arc<solana::SolanaChain>),
     #[cfg(feature = "bitcoin")]
     Bitcoin(Arc<bitcoin::BitcoinChain>),
+    #[cfg(feature = "zcash")]
+    Zcash(Arc<zcash::ZcashChain>),
     #[cfg(feature = "tron")]
     Tron(Arc<tron::TronChain>),
     #[cfg(feature = "ton")]
@@ -35,6 +37,8 @@ impl ChainHandle {
             Self::Solana(c) => c.pool.next_url().map(|u| u.to_string()),
             #[cfg(feature = "bitcoin")]
             Self::Bitcoin(c) => c.pool.next_url().map(|u| u.to_string()),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.pool.next_url().map(|u| u.to_string()),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.pool.next_url().map(|u| u.to_string()),
             #[cfg(feature = "ton")]
@@ -52,6 +56,8 @@ impl ChainHandle {
             Self::Solana(c) => c.as_ref(),
             #[cfg(feature = "bitcoin")]
             Self::Bitcoin(c) => c.as_ref(),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
             #[cfg(feature = "ton")]
@@ -69,6 +75,8 @@ impl ChainHandle {
             Self::Solana(c) => c.as_ref(),
             #[cfg(feature = "bitcoin")]
             Self::Bitcoin(c) => c.as_ref(),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
             #[cfg(feature = "ton")]
@@ -86,6 +94,8 @@ impl ChainHandle {
             Self::Solana(c) => c.as_ref(),
             #[cfg(feature = "bitcoin")]
             Self::Bitcoin(c) => c.as_ref(),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
             #[cfg(feature = "ton")]
@@ -103,6 +113,8 @@ impl ChainHandle {
             Self::Solana(c) => c.as_ref(),
             #[cfg(feature = "bitcoin")]
             Self::Bitcoin(c) => c.as_ref(),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.as_ref(),
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.as_ref(),
             #[cfg(feature = "ton")]
@@ -154,6 +166,8 @@ impl TokenBalance for ChainHandle {
             Self::Solana(c) => c.token_balance(wallet, token).await,
             #[cfg(feature = "bitcoin")]
             Self::Bitcoin(_) => Err(AppError::Unimplemented("bitcoin token balance".into())),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.token_balance(wallet, token).await,
             #[cfg(feature = "tron")]
             Self::Tron(c) => c.token_balance(wallet, token).await,
             #[cfg(feature = "ton")]
@@ -195,6 +209,9 @@ impl GasEstimator for ChainHandle {
             // Sui: dry-run the signed transaction block.
             #[cfg(feature = "sui")]
             Self::Sui(c) => c.estimate_gas(tx).await,
+            // Zcash: zcashd fee estimate (ZEC/kB) converted to zat/vB.
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.estimate_gas(tx).await,
             _ => Err(AppError::Unimplemented("estimate_gas".into())),
         }
     }

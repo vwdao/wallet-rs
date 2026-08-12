@@ -28,6 +28,7 @@ fn normalize_tx(
         Some(ChainFamily::Bitcoin) => normalize_utxo_tx(height, idx, &mut tx),
         Some(ChainFamily::Tron) => normalize_tron_tx(height, idx, &mut tx),
         Some(ChainFamily::UtxoOther) => normalize_utxo_tx(height, idx, &mut tx),
+        Some(ChainFamily::Zcash) => normalize_utxo_tx(height, idx, &mut tx),
         // TON (The Open Network) and Sui use non-account models; their
         // per-block tx normalization is intentionally not implemented yet
         // (see wallet-chain/src/ton and wallet-chain/src/sui). Pass txs
@@ -251,6 +252,14 @@ mod tests {
     fn test_utxo_status_sets_success() {
         let txs = parse_block(ChainIndex::BTC, 100, vec![tx("btc1", json!({}))]);
         assert_eq!(txs[0].status, TxStatus::Success);
+    }
+
+    #[test]
+    fn test_zcash_status_sets_success() {
+        // Zcash is its own family but shares UTXO normalization.
+        let txs = parse_block(ChainIndex::ZCASH, 100, vec![tx("zec1", json!({}))]);
+        assert_eq!(txs[0].status, TxStatus::Success);
+        assert_eq!(txs[0].block_number, 100);
     }
 
     #[test]

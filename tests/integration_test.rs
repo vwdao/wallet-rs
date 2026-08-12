@@ -40,6 +40,15 @@ mod tests {
             ChainFamily::for_index(ChainIndex::BTC),
             Some(ChainFamily::Bitcoin)
         );
+        assert_eq!(
+            ChainFamily::for_index(ChainIndex::ZCASH),
+            Some(ChainFamily::Zcash)
+        );
+        assert_eq!(
+            ChainFamily::for_index(ChainIndex::DOGE),
+            Some(ChainFamily::UtxoOther)
+        );
+        assert_eq!(ChainFamily::Zcash.as_str(), "zcash");
     }
 
     #[test]

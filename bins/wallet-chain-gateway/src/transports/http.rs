@@ -20,6 +20,12 @@ pub async fn execute(
         .send()
         .await
         .map_err(|e| AppError::Unavailable(e.to_string()))?;
+    // 429 means the node is alive but over quota (common on free/public
+    // gateways like Tatum). Surface it distinctly so the health checker can
+    // keep the endpoint in rotation instead of marking it unhealthy.
+    if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return Err(AppError::TooManyRequests);
+    }
     if !resp.status().is_success() {
         return Err(AppError::Unavailable(format!(
             "rpc returned {}",

@@ -1645,7 +1645,7 @@ mod tests {
         assert_eq!(infer_network_meta(0), ("BTC".into(), "bitcoin"));
         assert_eq!(infer_network_meta(3), ("DOGE".into(), "bitcoin"));
         assert_eq!(infer_network_meta(60), ("ETH".into(), "evm"));
-        assert_eq!(infer_network_meta(133), ("ZEC".into(), "bitcoin"));
+        assert_eq!(infer_network_meta(133), ("ZEC".into(), "zcash"));
         assert_eq!(infer_network_meta(195), ("TRON".into(), "tron"));
         assert_eq!(infer_network_meta(501), ("SOL".into(), "solana"));
         assert_eq!(infer_network_meta(607), ("TON".into(), "ton"));

@@ -276,3 +276,92 @@ spec:
                 mode: 0755
         - name: config
           emptyDir: {}
+---
+# ── DOGE sync ──
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wallet-sync-doge-cm
+  namespace: wallet
+data:
+  wallet-sync.yaml.tmpl: |
+    poll_interval_ms: 1000
+    database:
+      url: "postgres://wallet:${POSTGRES_PASSWORD}@postgres:5432/wallet"
+    redis:
+      url: "redis://redis:6379"
+    nats:
+      url: "nats://nats:4222"
+    chain:
+      chain_index: 3
+      family: bitcoin
+      confirmations: 12
+      endpoints:
+        - url: "${DOGE_RPC_URL}"
+          weight: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-sync-doge
+  namespace: wallet
+  labels:
+    app: wallet-sync
+    chain: doge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wallet-sync
+      chain: doge
+  template:
+    metadata:
+      labels:
+        app: wallet-sync
+        chain: doge
+    spec:
+      containers:
+        - name: wallet-sync
+          image: wallet:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/scripts/start.sh"]
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wallet-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DOGE_RPC_URL
+              value: "http://wallet-chain-gateway:8545/rpc/doge/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+          volumeMounts:
+            - name: config-template
+              mountPath: /etc/wallet-template
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+            - name: config
+              mountPath: /tmp/cfg.yaml
+              subPath: cfg.yaml
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config-template
+          configMap:
+            name: wallet-sync-doge-cm
+        - name: scripts
+          configMap:
+            name: wallet-sync-cm
+            items:
+              - key: start.sh
+                path: start.sh
+                mode: 0755
+        - name: config
+          emptyDir: {}

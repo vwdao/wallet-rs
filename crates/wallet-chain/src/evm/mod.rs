@@ -441,7 +441,7 @@ fn erc20_transfer_tx(
         status,
         raw: json!({ "log": log, "txIndex": tx_index }),
         contract_address: Some(Address::new(contract.to_string())),
-        log_index,
+        log_index: log_index.map(|i| i as i64),
         // Rows derived from an ERC20 `Transfer(address,address,uint256)` event;
         // the method is the event itself regardless of the tx calldata.
         method: Some("transfer".to_string()),

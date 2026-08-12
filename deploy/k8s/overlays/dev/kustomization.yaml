@@ -367,6 +367,33 @@ patches:
                     cpu: 200m
                     memory: 128Mi
 
+  - target:
+      kind: Deployment
+      name: wallet-sync-doge
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: wallet-sync-doge
+      spec:
+        replicas: 1
+        template:
+          spec:
+            containers:
+              - name: wallet-sync
+                env:
+                  - name: RUST_LOG
+                    value: "debug"
+                  - name: DOGE_RPC_URL
+                    value: "http://wallet-chain-gateway:8545/rpc/doge/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+                resources:
+                  requests:
+                    cpu: 50m
+                    memory: 64Mi
+                  limits:
+                    cpu: 200m
+                    memory: 128Mi
+
   # ── wallet-jobs ──
   - target:
       kind: Deployment
