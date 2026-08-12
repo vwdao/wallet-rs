@@ -46,6 +46,9 @@ pub struct Network {
 
     pub enabled: bool,
 
+    #[default(Vec::<String>::new())]
+    pub supported_protocols: Vec<String>,
+
     #[default(jiff::Timestamp::now())]
     pub created_at: jiff::Timestamp,
 }

@@ -171,6 +171,8 @@ pub struct JobsConfig {
     pub redis: RedisConfig,
     pub nats: NatsConfig,
     #[serde(default)]
+    pub clickhouse: Option<ClickHouseConfig>,
+    #[serde(default)]
     pub chains: Vec<ChainRuntimeConfig>,
 }
 

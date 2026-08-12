@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 use wallet_chain::build_registry;
 use wallet_config::{load_yaml, JobsConfig};
+use wallet_db::clickhouse::ClickHouseDb;
 use wallet_db::Db;
 use wallet_domain::AppState;
 use wallet_events::{MemoryEventBus, NatsEventBus};
@@ -32,7 +33,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(b) => b as Arc<dyn wallet_events::EventBus>,
         Err(_) => MemoryEventBus::new(256),
     };
-    let state = Arc::new(AppState::new(db.clone(), chains, events.clone(), None));
+    let clickhouse = cfg.clickhouse.as_ref().map(ClickHouseDb::connect);
+    if let Some(ch) = &clickhouse {
+        if let Err(e) = ch.ensure_schema().await {
+            tracing::warn!(error = %e, "clickhouse schema push skipped");
+        }
+    }
+    let state = Arc::new(AppState::new(db.clone(), chains, events.clone(), clickhouse));
 
     let shutdown = async {
         tokio::signal::ctrl_c().await.ok();

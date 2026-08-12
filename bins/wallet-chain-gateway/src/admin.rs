@@ -388,6 +388,7 @@ struct NetworkResponse {
     family: String,
     evm_chain_id: Option<i64>,
     enabled: bool,
+    supported_protocols: Vec<String>,
 }
 
 impl NetworkResponse {
@@ -398,6 +399,7 @@ impl NetworkResponse {
             family: r.family.clone(),
             evm_chain_id: r.evm_chain_id,
             enabled: r.enabled,
+            supported_protocols: r.supported_protocols.clone(),
         }
     }
 }
@@ -417,6 +419,78 @@ async fn list_networks(req: &mut Request, depot: &mut Depot, res: &mut Response)
             .map_err(|e| AppError::internal(e.to_string()))?;
 
         Ok(Json(rows.iter().map(NetworkResponse::from_row).collect()))
+    }
+    .await;
+    match result {
+        Ok(j) => res.render(j),
+        Err(e) => res.render(e),
+    }
+}
+
+fn normalize_protocols(protocols: &[String]) -> Result<Vec<String>, AppError> {
+    let mut seen = std::collections::BTreeSet::new();
+    for raw in protocols {
+        let normalized = crate::protocol::EndpointProtocol::from_config(raw)?.as_str();
+        seen.insert(normalized.to_string());
+    }
+    Ok(seen.into_iter().collect())
+}
+
+#[derive(Deserialize)]
+struct UpdateNetworkRequest {
+    name: Option<String>,
+    enabled: Option<bool>,
+    supported_protocols: Option<Vec<String>>,
+}
+
+#[handler]
+async fn update_network(req: &mut Request, depot: &mut Depot, res: &mut Response) {
+    let result: Result<Json<NetworkResponse>, AppError> = async {
+        let st = depot
+            .get_typed::<Gw>()
+            .map_err(|_| AppError::internal("state missing"))?;
+        require_admin(req, depot, st)?;
+
+        let chain_index: i64 = req
+            .param("chain_index")
+            .ok_or_else(|| AppError::InvalidArgument("missing chain_index".into()))?;
+        let body: UpdateNetworkRequest = req
+            .parse_json()
+            .await
+            .map_err(|e| AppError::InvalidArgument(e.to_string()))?;
+
+        let supported_protocols = match &body.supported_protocols {
+            Some(protocols) => normalize_protocols(protocols)?,
+            None => Vec::new(),
+        };
+        if let Some(name) = &body.name {
+            if name.trim().is_empty() {
+                return Err(AppError::InvalidArgument("name must not be empty".into()));
+            }
+        }
+
+        let mut db = st.db.clone_inner();
+        let mut network = ensure_network(&st.db, chain_index).await?;
+
+        let mut upd = network.update();
+        if let Some(name) = &body.name {
+            upd = upd.name(name.trim());
+        }
+        if let Some(enabled) = body.enabled {
+            upd = upd.enabled(enabled);
+        }
+        if body.supported_protocols.is_some() {
+            upd = upd.supported_protocols(supported_protocols);
+        }
+        upd.exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let row = Network::get_by_chain_index(&mut db, &chain_index)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        Ok(Json(NetworkResponse::from_row(&row)))
     }
     .await;
     match result {
@@ -844,7 +918,6 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
 
         let api_key: Option<String> = req.query("api_key");
         let chain_index: Option<i64> = req.query("chain_index");
-        let limit: i64 = req.query("limit").unwrap_or(100);
         let mut db = st.db.clone_inner();
 
         let mut q = ChainGatewayStats::all();
@@ -863,7 +936,6 @@ async fn get_stats(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         }
 
         let rows: Vec<ChainGatewayStats> = q
-            .limit(limit as usize)
             .exec(&mut db)
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
@@ -1250,9 +1322,19 @@ fn protocol_rank(protocol: &str) -> u8 {
 }
 
 #[derive(Serialize)]
+struct StatsByChainMethod {
+    method: String,
+    total_requests: i64,
+    success_count: i64,
+    error_count: i64,
+    avg_latency_ms: f64,
+}
+
+#[derive(Serialize)]
 struct StatsByChainSeries {
     chain_index: i64,
     total_requests: i64,
+    methods: Vec<StatsByChainMethod>,
 }
 
 #[derive(Serialize)]
@@ -1312,19 +1394,67 @@ async fn get_stats_by_chain(req: &mut Request, depot: &mut Depot, res: &mut Resp
 
         let mut totals: std::collections::HashMap<i64, i64> = std::collections::HashMap::new();
         let mut buckets: BTreeMap<i64, std::collections::HashMap<i64, i64>> = BTreeMap::new();
+        let mut chain_methods: std::collections::HashMap<
+            i64,
+            std::collections::HashMap<String, (i64, i64, i64)>,
+        > = std::collections::HashMap::new();
 
         for row in &rows {
             *totals.entry(row.chain_index).or_insert(0) += 1;
             let bucket = (row.created_at.as_second() / bucket_secs) * bucket_secs;
             let entry = buckets.entry(bucket).or_default();
             *entry.entry(row.chain_index).or_insert(0) += 1;
+
+            let method = row
+                .method
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .unwrap_or("未知")
+                .to_string();
+            let method_entry = chain_methods
+                .entry(row.chain_index)
+                .or_default()
+                .entry(method)
+                .or_insert((0, 0, 0));
+            method_entry.0 += 1;
+            if row.status_code >= 400 {
+                method_entry.1 += 1;
+            }
+            method_entry.2 += row.latency_ms as i64;
         }
 
         let mut series: Vec<StatsByChainSeries> = totals
             .into_iter()
-            .map(|(chain_index, total_requests)| StatsByChainSeries {
-                chain_index,
-                total_requests,
+            .map(|(chain_index, total_requests)| {
+                let mut methods: Vec<StatsByChainMethod> = chain_methods
+                    .get(&chain_index)
+                    .map(|map| {
+                        map.iter()
+                            .map(|(method, (total, errors, total_latency))| StatsByChainMethod {
+                                method: method.clone(),
+                                total_requests: *total,
+                                success_count: total - errors,
+                                error_count: *errors,
+                                avg_latency_ms: if *total > 0 {
+                                    *total_latency as f64 / *total as f64
+                                } else {
+                                    0.0
+                                },
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                methods.sort_by(|a, b| {
+                    b.total_requests
+                        .cmp(&a.total_requests)
+                        .then_with(|| a.method.cmp(&b.method))
+                });
+                StatsByChainSeries {
+                    chain_index,
+                    total_requests,
+                    methods,
+                }
             })
             .collect();
         series.sort_by(|a, b| {
@@ -1612,6 +1742,10 @@ pub fn admin_router() -> Router {
                 .delete(delete_key),
         )
         .push(Router::with_path("networks").get(list_networks))
+        .push(
+            Router::with_path("networks/{chain_index}")
+                .put(update_network),
+        )
         .push(
             Router::with_path("endpoints")
                 .get(list_endpoints)

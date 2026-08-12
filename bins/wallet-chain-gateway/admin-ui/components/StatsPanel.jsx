@@ -279,7 +279,7 @@ export function StatsPanel({ api }) {
         <div className="stats-panel-head">
           <div>
             <h3>链请求统计</h3>
-            <p>按时间桶查看各链请求量分布，悬停可看明细合计。</p>
+            <p>按时间桶查看各链请求量分布，下方按链查看调用的 RPC 方法与请求次数。</p>
           </div>
         </div>
         <ChainStatsChart data={byChain} loading={chainChartLoading} />

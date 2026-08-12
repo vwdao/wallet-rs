@@ -81,7 +81,12 @@ pub async fn resolve_chain_index(db: &Db, chain: &str) -> Result<i64, AppError> 
 
     networks
         .into_iter()
-        .find(|n| n.name.eq_ignore_ascii_case(chain))
+        .find(|n| {
+            n.name.eq_ignore_ascii_case(chain)
+                || wallet_types::ChainIndex(n.chain_index)
+                    .short_name()
+                    .is_some_and(|slug| slug.eq_ignore_ascii_case(chain))
+        })
         .map(|n| n.chain_index)
         .ok_or_else(|| AppError::InvalidArgument(format!("unknown chain: {chain}")))
 }

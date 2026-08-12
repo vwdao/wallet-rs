@@ -25,19 +25,25 @@ export function endpointProtocol(endpoint) {
   }
 }
 
-export function availableLinkTypes(endpoints) {
+export function availableLinkTypes(endpoints, supportedProtocols = []) {
   const protocols = new Set()
   for (const endpoint of endpoints || []) {
     const protocol = endpointProtocol(endpoint)
     if (protocol) protocols.add(protocol)
   }
   if (protocols.size === 0) return []
-  const types = ['http']
+  let types = ['http']
   if (protocols.has('ws') || protocols.has('grpc') || protocols.has('tcp')) {
     types.push('ws')
   }
   if (protocols.has('grpc')) {
     types.push('grpc')
+  }
+  const allow = new Set(
+    (supportedProtocols || []).map((p) => PROTOCOL_ALIASES[String(p).toLowerCase()] || String(p).toLowerCase()),
+  )
+  if (allow.size > 0) {
+    types = types.filter((type) => allow.has(type))
   }
   return types
 }
@@ -64,12 +70,19 @@ function ensureScheme(base, fallback) {
   return schemeOf(clean) ? clean : `${fallback}://${clean}`
 }
 
-export function buildRpcLinks({ base, grpcBase, chainName: rawName, apiKey, endpoints }) {
+export function buildRpcLinks({
+  base,
+  grpcBase,
+  chainName: rawName,
+  apiKey,
+  endpoints,
+  supportedProtocols,
+}) {
   const path = encodeURIComponent(String(rawName || '').trim().toLowerCase())
   const key = String(apiKey || '').trim()
   const links = []
 
-  for (const type of availableLinkTypes(endpoints)) {
+  for (const type of availableLinkTypes(endpoints, supportedProtocols)) {
     if (type === 'http') {
       links.push({
         type,

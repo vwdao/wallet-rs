@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ConnectPanel } from '../components/ConnectPanel.jsx'
+import { ChainsPanel } from '../components/ChainsPanel.jsx'
 import { EndpointsPanel } from '../components/EndpointsPanel.jsx'
 import { KeysPanel } from '../components/KeysPanel.jsx'
 import { Login } from '../components/Login.jsx'
@@ -36,8 +36,8 @@ export default function Page() {
         <EndpointsPanel api={api} />
       ) : tab === 'keys' ? (
         <KeysPanel api={api} />
-      ) : tab === 'connect' ? (
-        <ConnectPanel api={api} />
+      ) : tab === 'chains' ? (
+        <ChainsPanel api={api} />
       ) : tab === 'stats' ? (
         <StatsPanel api={api} />
       ) : tab === 'settings' ? (

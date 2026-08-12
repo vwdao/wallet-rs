@@ -84,7 +84,7 @@ impl EventSubscription for MemorySub {
     async fn next(&mut self) -> AppResult<Option<EventEnvelope>> {
         loop {
             match self.rx.recv().await {
-                Ok(ev) if ev.subject == self.subject || self.subject.ends_with('>') => {
+                Ok(ev) if subject_matches(&self.subject, &ev.subject) => {
                     self.last = Some(ev.clone());
                     return Ok(Some(ev));
                 }
@@ -100,6 +100,72 @@ impl EventSubscription for MemorySub {
         Ok(())
     }
 }
+
+/// NATS-style subject matching: `*` matches exactly one token, `>` matches
+/// one or more trailing tokens.
+fn subject_matches(pattern: &str, subject: &str) -> bool {
+    if pattern == ">" {
+        return true;
+    }
+    let pat: Vec<&str> = pattern.split('.').collect();
+    let sub: Vec<&str> = subject.split('.').collect();
+    let mut pi = 0;
+    let mut si = 0;
+    while pi < pat.len() {
+        match pat[pi] {
+            ">" => return si < sub.len(),
+            "*" => {
+                if si >= sub.len() {
+                    return false;
+                }
+                pi += 1;
+                si += 1;
+            }
+            p => {
+                if si >= sub.len() || sub[si] != p {
+                    return false;
+                }
+                pi += 1;
+                si += 1;
+            }
+        }
+    }
+    si == sub.len()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::subject_matches;
+
+    #[test]
+    fn exact_match() {
+        assert!(subject_matches("wallet.tx.indexed", "wallet.tx.indexed"));
+        assert!(!subject_matches("wallet.tx.indexed", "wallet.tx.pending"));
+    }
+
+    #[test]
+    fn single_token_wildcard() {
+        assert!(subject_matches("wallet.tx.*", "wallet.tx.indexed"));
+        assert!(subject_matches("wallet.tx.*", "wallet.tx.pending"));
+        assert!(!subject_matches("wallet.tx.*", "wallet.tx.indexed.extra"));
+        assert!(!subject_matches("wallet.tx.*", "wallet.other.indexed"));
+    }
+
+    #[test]
+    fn tail_wildcard() {
+        assert!(subject_matches("wallet.>", "wallet.tx.indexed"));
+        assert!(subject_matches("wallet.>", "wallet.tx"));
+        assert!(!subject_matches("wallet.>", "wallet"));
+        assert!(subject_matches(">", "anything.at.all"));
+    }
+
+    #[test]
+    fn wildcard_requires_token() {
+        assert!(!subject_matches("wallet.*.indexed", "wallet.indexed"));
+        assert!(subject_matches("wallet.*.indexed", "wallet.tx.indexed"));
+    }
+}
+
 
 pub struct NatsEventBus {
     client: async_nats::Client,

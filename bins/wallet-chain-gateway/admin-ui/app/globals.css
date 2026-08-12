@@ -663,6 +663,102 @@ td.url.copied {
   line-height: 1.6;
 }
 
+/* Chains panel */
+.text-muted {
+  color: var(--muted);
+}
+
+tbody tr.row-disabled td {
+  opacity: 0.55;
+}
+
+.chain-name {
+  font-weight: 600;
+}
+
+.chain-id {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.protocol-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+label.protocol-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+
+label.protocol-check:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+label.protocol-check.checked {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(20, 184, 166, 0.1);
+}
+
+label.protocol-check input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.chain-links-cell {
+  min-width: 300px;
+}
+
+.chain-links {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chain-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chain-link-tag {
+  flex: none;
+  width: 38px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: right;
+}
+
+.chain-link-url {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text);
+  word-break: break-all;
+  cursor: pointer;
+}
+
+.chain-link-url:hover {
+  color: var(--accent);
+}
+
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1231,6 +1327,7 @@ label.check input[type='checkbox'] {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  margin-bottom: 12px;
 }
 
 .chain-tag {
@@ -1240,6 +1337,19 @@ label.check input[type='checkbox'] {
   border-radius: 4px;
   font-size: 11px;
   color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chain-tag:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+}
+
+.chain-tag.active {
+  color: var(--text);
+  border-color: rgba(20, 184, 166, 0.45);
+  background: rgba(20, 184, 166, 0.08);
 }
 
 @media (max-width: 600px) {

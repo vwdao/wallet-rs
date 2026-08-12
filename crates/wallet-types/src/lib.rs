@@ -33,6 +33,31 @@ impl ChainIndex {
     pub fn as_i64(self) -> i64 {
         self.0
     }
+
+    /// Canonical lowercase RPC slug used in gateway route paths
+    /// (`/rpc/arb/...`, `/rpc/eth/...`). Known chains resolve to the short
+    /// slug regardless of the network's display name.
+    pub fn short_name(self) -> Option<&'static str> {
+        Some(match self {
+            Self::BTC => "btc",
+            Self::DOGE => "doge",
+            Self::ETH => "eth",
+            Self::ZCASH => "zec",
+            Self::TRON => "tron",
+            Self::SOL => "sol",
+            Self::TON => "ton",
+            Self::SUI => "sui",
+            Self::POL => "pol",
+            Self::BSC => "bsc",
+            Self::BASE => "base",
+            Self::ARB => "arb",
+            Self::OP => "op",
+            Self::AVAX => "avax",
+            Self::HYPERLIQUID => "hyper",
+            Self::ROBINHOOD => "robin",
+            _ => return None,
+        })
+    }
 }
 
 impl fmt::Display for ChainIndex {
@@ -284,5 +309,14 @@ mod tests {
         assert_eq!(decimal_from_u128(u128::MAX), Decimal::MAX);
         let max = (1u128 << 96) - 1;
         assert_eq!(decimal_from_u128(max), Decimal::from(max));
+    }
+
+    #[test]
+    fn test_short_name_returns_canonical_slugs() {
+        assert_eq!(ChainIndex::BTC.short_name(), Some("btc"));
+        assert_eq!(ChainIndex::ARB.short_name(), Some("arb"));
+        assert_eq!(ChainIndex::ETH.short_name(), Some("eth"));
+        assert_eq!(ChainIndex::HYPERLIQUID.short_name(), Some("hyper"));
+        assert_eq!(ChainIndex(99999).short_name(), None);
     }
 }

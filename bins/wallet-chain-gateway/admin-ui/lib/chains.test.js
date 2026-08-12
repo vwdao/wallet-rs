@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { chainName } from './chains.js'
+import { chainName, chainSlug } from './chains.js'
 
 describe('chainName', () => {
   it('maps known chains', () => {
@@ -11,5 +11,22 @@ describe('chainName', () => {
   })
   it('falls back to id', () => {
     expect(chainName(99999)).toBe('99999')
+  })
+})
+
+describe('chainSlug', () => {
+  it('uses the canonical lowercase slug for known chains', () => {
+    expect(chainSlug({ id: 10042221, name: 'Arbitrum One' })).toBe('arb')
+    expect(chainSlug({ id: 60, name: 'Ethereum' })).toBe('eth')
+    expect(chainSlug({ id: 10009000, name: 'Avalanche' })).toBe('avax')
+  })
+
+  it('falls back to the display name for custom chains', () => {
+    expect(chainSlug({ id: 9999, name: 'My Custom Chain' })).toBe('my custom chain')
+    expect(chainSlug({ id: 9999, name: '自定义链' })).toBe('自定义链')
+  })
+
+  it('accepts chain_index-shaped objects', () => {
+    expect(chainSlug({ chain_index: 607, name: 'TON Mainnet' })).toBe('ton')
   })
 })

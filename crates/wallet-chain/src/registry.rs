@@ -48,6 +48,15 @@ impl ChainHandle {
         }
     }
 
+    /// EVM chain id when the handle wraps an EVM network, else `None`.
+    pub fn evm_chain_id(&self) -> Option<u64> {
+        match self {
+            #[cfg(feature = "evm")]
+            Self::Evm(c) => Some(c.chain_id),
+            _ => None,
+        }
+    }
+
     pub fn as_balance_reader(&self) -> &dyn BalanceReader {
         match self {
             #[cfg(feature = "evm")]

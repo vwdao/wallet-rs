@@ -44,6 +44,18 @@ describe('availableLinkTypes', () => {
     expect(availableLinkTypes([])).toEqual([])
     expect(availableLinkTypes(null)).toEqual([])
   })
+
+  it('restricts types to the chain allowlist when set', () => {
+    expect(availableLinkTypes([{ protocol: 'grpc' }], ['grpc'])).toEqual(['grpc'])
+    expect(availableLinkTypes([{ protocol: 'http' }], ['http'])).toEqual(['http'])
+    expect(availableLinkTypes([{ protocol: 'http' }], ['grpc'])).toEqual([])
+    expect(availableLinkTypes([{ protocol: 'ws' }], ['http', 'ws'])).toEqual(['http', 'ws'])
+  })
+
+  it('treats empty allowlist as auto-detect', () => {
+    expect(availableLinkTypes([{ protocol: 'grpc' }], [])).toEqual(['http', 'ws', 'grpc'])
+    expect(availableLinkTypes([{ protocol: 'grpc' }], null)).toEqual(['http', 'ws', 'grpc'])
+  })
 })
 
 describe('buildRpcLinks', () => {
@@ -87,20 +99,43 @@ describe('buildRpcLinks', () => {
     expect(links[1].url).toBe('wss://gw.example.com/rpc/eth/gw_abc')
   })
 
-  it('url-encodes chain names with spaces', () => {
+  it('url-encodes arbitrary chain names with spaces', () => {
     const links = buildRpcLinks({
       base,
       grpcBase: '',
-      chainName: 'Arbitrum One',
+      chainName: 'My Custom Chain',
       apiKey: 'gw_abc',
       endpoints: [{ protocol: 'http' }],
     })
-    expect(links[0].url).toBe('http://127.0.0.1:8545/rpc/arbitrum%20one/gw_abc')
+    expect(links[0].url).toBe('http://127.0.0.1:8545/rpc/my%20custom%20chain/gw_abc')
+  })
+
+  it('keeps canonical short slugs (e.g. arb) as-is', () => {
+    const links = buildRpcLinks({
+      base,
+      grpcBase: '',
+      chainName: 'arb',
+      apiKey: 'gw_abc',
+      endpoints: [{ protocol: 'http' }],
+    })
+    expect(links[0].url).toBe('http://127.0.0.1:8545/rpc/arb/gw_abc')
   })
 
   it('returns no links when the chain has no endpoints', () => {
     expect(
       buildRpcLinks({ base, grpcBase, chainName: 'ETH', apiKey: 'gw_abc', endpoints: [] }),
     ).toEqual([])
+  })
+
+  it('respects the chain supported protocols allowlist', () => {
+    const links = buildRpcLinks({
+      base,
+      grpcBase,
+      chainName: 'TRON',
+      apiKey: 'gw_abc',
+      endpoints: [{ protocol: 'grpc' }, { protocol: 'http' }],
+      supportedProtocols: ['grpc'],
+    })
+    expect(links.map((l) => l.type)).toEqual(['grpc'])
   })
 })

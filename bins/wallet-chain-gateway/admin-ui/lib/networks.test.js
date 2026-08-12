@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { CHAIN_OPTIONS } from './chains.js'
-import { mergeChainOptions, normalizeProtocol } from './networks.js'
+import { mergeChainOptions, mergeChains, normalizeProtocol } from './networks.js'
 
 describe('mergeChainOptions', () => {
   it('keeps static options and adds new networks', () => {
@@ -22,6 +22,40 @@ describe('mergeChainOptions', () => {
     const options = mergeChainOptions([{ chain_index: 2, name: 'ZZ', family: 'evm' }])
     const names = options.map((o) => o.name)
     expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+  })
+})
+
+describe('mergeChains', () => {
+  it('lists all known chains with disabled defaults', () => {
+    const chains = mergeChains([])
+    expect(chains).toHaveLength(CHAIN_OPTIONS.length)
+    const eth = chains.find((c) => c.id === 60)
+    expect(eth.name).toBe('ETH')
+    expect(eth.enabled).toBe(false)
+    expect(eth.supported_protocols).toEqual([])
+    expect(eth.inDb).toBe(false)
+  })
+
+  it('merges database rows, keeping enabled and protocols', () => {
+    const chains = mergeChains([
+      { chain_index: 60, name: 'Ethereum', family: 'evm', enabled: true, supported_protocols: ['http', 'grpc'] },
+      { chain_index: 9999, name: '自定义链', family: 'tron', enabled: false, supported_protocols: ['grpc'] },
+    ])
+    const eth = chains.find((c) => c.id === 60)
+    expect(eth.name).toBe('Ethereum')
+    expect(eth.enabled).toBe(true)
+    expect(eth.supported_protocols).toEqual(['http', 'grpc'])
+    expect(eth.inDb).toBe(true)
+    const custom = chains.find((c) => c.id === 9999)
+    expect(custom.name).toBe('自定义链')
+    expect(custom.enabled).toBe(false)
+    expect(custom.inDb).toBe(true)
+    expect(chains.find((c) => c.id === 60)).not.toBeUndefined()
+  })
+
+  it('handles null or invalid input', () => {
+    expect(mergeChains(null)).toHaveLength(CHAIN_OPTIONS.length)
+    expect(mergeChains([{ chain_index: 'x' }])).toHaveLength(CHAIN_OPTIONS.length)
   })
 })
 

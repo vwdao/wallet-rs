@@ -11,6 +11,39 @@ export function mergeChainOptions(networks) {
   return [...known.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
+export function mergeChains(networks) {
+  const map = new Map(
+    CHAIN_OPTIONS.map((item) => [
+      item.id,
+      {
+        id: item.id,
+        name: item.name,
+        family: '',
+        enabled: false,
+        supported_protocols: [],
+        inDb: false,
+      },
+    ]),
+  )
+  for (const network of networks || []) {
+    const id = Number(network.chain_index)
+    if (!Number.isFinite(id)) continue
+    const existing = map.get(id)
+    const name = network.name || existing?.name || chainName(id)
+    map.set(id, {
+      id,
+      name,
+      family: network.family || existing?.family || '',
+      enabled: network.enabled !== false,
+      supported_protocols: Array.isArray(network.supported_protocols)
+        ? network.supported_protocols.map(String)
+        : [],
+      inDb: true,
+    })
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
 const PROTOCOL_ALIASES = {
   https: 'http',
   wss: 'ws',

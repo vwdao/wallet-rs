@@ -4,4 +4,61 @@ redis:
   url: "redis://127.0.0.1:6379"
 nats:
   url: "nats://127.0.0.1:4222"
-chains: []
+clickhouse:
+  url: "http://127.0.0.1:8123"
+  database: "wallet"
+chains:
+  - chain_index: 60
+    family: evm
+    evm_chain_id: 1
+    confirmations: 12
+    endpoints:
+      - url: "https://eth.llamarpc.com"
+        weight: 1
+  - chain_index: 20000714
+    family: evm
+    evm_chain_id: 56
+    confirmations: 12
+    endpoints:
+      - url: "https://bsc-dataseed1.binance.org"
+        weight: 1
+  - chain_index: 966
+    family: evm
+    evm_chain_id: 137
+    confirmations: 12
+    endpoints:
+      - url: "https://polygon-rpc.com"
+        weight: 1
+  - chain_index: 10042221
+    family: evm
+    evm_chain_id: 42161
+    confirmations: 12
+    endpoints:
+      - url: "https://arb1.arbitrum.io/rpc"
+        weight: 1
+  - chain_index: 10000070
+    family: evm
+    evm_chain_id: 10
+    confirmations: 12
+    endpoints:
+      - url: "https://mainnet.optimism.io"
+        weight: 1
+  - chain_index: 8453
+    family: evm
+    evm_chain_id: 8453
+    confirmations: 12
+    endpoints:
+      - url: "https://mainnet.base.org"
+        weight: 1
+  - chain_index: 501
+    family: solana
+    confirmations: 32
+    endpoints:
+      - url: "https://api.mainnet-beta.solana.com"
+        weight: 1
+  - chain_index: 195
+    family: tron
+    confirmations: 20
+    endpoints:
+      - url: "https://api.trongrid.io"
+        weight: 1

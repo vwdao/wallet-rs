@@ -5,7 +5,7 @@ import { Button } from './ui/Button.jsx'
 const tabs = [
   ['endpoints', 'RPC 节点'],
   ['keys', 'API Keys'],
-  ['connect', '连接'],
+  ['chains', '链'],
   ['stats', '统计'],
   ['settings', '配置'],
 ]
