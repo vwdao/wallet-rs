@@ -29,7 +29,6 @@ COPY crates/wallet-test-support/Cargo.toml crates/wallet-test-support/Cargo.toml
 COPY bins/wallet-api/Cargo.toml bins/wallet-api/Cargo.toml
 COPY bins/wallet-apigw-app/Cargo.toml bins/wallet-apigw-app/Cargo.toml
 COPY bins/wallet-apigw-admin/Cargo.toml bins/wallet-apigw-admin/Cargo.toml
-COPY bins/wallet-apigw-webhook/Cargo.toml bins/wallet-apigw-webhook/Cargo.toml
 COPY bins/wallet-chain-gateway/Cargo.toml bins/wallet-chain-gateway/Cargo.toml
 COPY bins/wallet-sync/Cargo.toml bins/wallet-sync/Cargo.toml
 COPY bins/wallet-jobs/Cargo.toml bins/wallet-jobs/Cargo.toml
@@ -38,7 +37,7 @@ COPY bins/wallet-ws/Cargo.toml bins/wallet-ws/Cargo.toml
 # Create dummy src files for dependency caching
 RUN for dir in crates/wallet-types crates/wallet-error crates/wallet-config crates/wallet-proto \
     crates/wallet-chain crates/wallet-db crates/wallet-events crates/wallet-domain crates/wallet-test-support \
-    bins/wallet-api bins/wallet-apigw-app bins/wallet-apigw-admin bins/wallet-apigw-webhook \
+    bins/wallet-api bins/wallet-apigw-app bins/wallet-apigw-admin \
     bins/wallet-chain-gateway bins/wallet-sync bins/wallet-jobs bins/wallet-ws; do \
     mkdir -p "$dir/src" && echo "fn main() {}" > "$dir/src/main.rs" 2>/dev/null || true; \
     echo "" > "$dir/src/lib.rs" 2>/dev/null || true; \
@@ -78,7 +77,6 @@ WORKDIR /app
 COPY --from=builder /app/target/release/wallet-api /app/wallet-api
 COPY --from=builder /app/target/release/wallet-apigw-app /app/wallet-apigw-app
 COPY --from=builder /app/target/release/wallet-apigw-admin /app/wallet-apigw-admin
-COPY --from=builder /app/target/release/wallet-apigw-webhook /app/wallet-apigw-webhook
 COPY --from=builder /app/target/release/wallet-chain-gateway /app/wallet-chain-gateway
 COPY --from=builder /app/target/release/wallet-sync /app/wallet-sync
 COPY --from=builder /app/target/release/wallet-jobs /app/wallet-jobs
