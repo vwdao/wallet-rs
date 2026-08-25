@@ -81,6 +81,7 @@ impl AdminNetworkService for AdminNetworkSvc {
                 Some(n.evm_chain_id as i64)
             },
             enabled: n.enabled,
+            supported_protocols: Vec::new(),
             created_at: jiff::Timestamp::now(),
         };
         let saved = wallet_domain::network::NetworkService::new(&self.0)
