@@ -6,6 +6,9 @@ COPY bins/wallet-chain-gateway/admin-ui/package*.json bins/wallet-chain-gateway/
 RUN cd bins/wallet-chain-gateway/admin-ui && npm ci
 COPY bins/wallet-chain-gateway/admin-ui/next.config.mjs bins/wallet-chain-gateway/admin-ui/
 COPY bins/wallet-chain-gateway/admin-ui/app bins/wallet-chain-gateway/admin-ui/app
+COPY bins/wallet-chain-gateway/admin-ui/components bins/wallet-chain-gateway/admin-ui/components
+COPY bins/wallet-chain-gateway/admin-ui/lib bins/wallet-chain-gateway/admin-ui/lib
+COPY bins/wallet-chain-gateway/admin-ui/scripts bins/wallet-chain-gateway/admin-ui/scripts
 RUN cd bins/wallet-chain-gateway/admin-ui && npm run build
 
 # ── Stage 1: Build ──────────────────────────────────────────────────────
