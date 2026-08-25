@@ -8,8 +8,9 @@ FULL_TAG = $(REGISTRY)/$(IMAGE):$(TAG)
 ENV      ?= dev
 DEPLOY   = ./deploy/deploy.sh
 
-.PHONY: help build push deploy deploy-infra deploy-apps teardown status logs \
-        port-forward scale proto check test release diff validate
+.PHONY: help build build-image push push-image image deploy deploy-infra \
+        deploy-apps teardown status logs port-forward scale proto check test \
+        release diff validate
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -38,6 +39,25 @@ proto: ## Regenerate protobuf code
 push: build ## Build and push image
 	docker tag $(IMAGE):$(TAG) $(FULL_TAG)
 	docker push $(FULL_TAG)
+
+# Image build/push via buildx (mirrors wallet-core-go). Override:
+#   make image IMAGE_REPOSITORY=hub.awalletdev.com/wt-dev/wallet-rs IMAGE_TAG=short-sha
+#   BUILD_PLATFORM=linux/amd64 (default)
+IMAGE_REPOSITORY ?= hub.awalletdev.com/wt-dev/wallet-rs
+IMAGE_TAG        ?= $(shell git rev-parse --short HEAD)
+
+build-image: ## Build Docker image (override IMAGE_REPOSITORY / IMAGE_TAG / BUILD_PLATFORM)
+	IMAGE_REPOSITORY=$(IMAGE_REPOSITORY) \
+	IMAGE_TAG=$(IMAGE_TAG) \
+	BUILD_PLATFORM=$(BUILD_PLATFORM) \
+	./scripts/build_wallet_image.sh
+
+push-image: ## Push Docker image to registry
+	IMAGE_REPOSITORY=$(IMAGE_REPOSITORY) \
+	IMAGE_TAG=$(IMAGE_TAG) \
+	./scripts/push_wallet_image.sh
+
+image: build-image push-image ## Build and push Docker image
 
 # ── Deploy (per-environment) ─────────────────────────────────────────────
 
