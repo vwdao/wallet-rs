@@ -56,10 +56,9 @@ COPY crates crates
 COPY bins bins
 COPY migrations migrations
 
-# The gateway embeds the generated Vue entrypoint at compile time.
-RUN rm -rf bins/wallet-chain-gateway/static && mkdir -p bins/wallet-chain-gateway/static
-COPY --from=admin-ui-builder /app/bins/wallet-chain-gateway/admin-ui/out/ bins/wallet-chain-gateway/static/
-RUN cp bins/wallet-chain-gateway/static/index.html bins/wallet-chain-gateway/static/admin.html
+# The gateway embeds the generated admin UI at compile time (#[folder = "static/admin"]).
+RUN rm -rf bins/wallet-chain-gateway/static && mkdir -p bins/wallet-chain-gateway/static/admin
+COPY --from=admin-ui-builder /app/bins/wallet-chain-gateway/admin-ui/out/ bins/wallet-chain-gateway/static/admin/
 
 # Touch to invalidate cache for actual source
 RUN find crates bins -name "*.rs" -exec touch {} +
