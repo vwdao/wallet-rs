@@ -18,6 +18,7 @@ members = [
     "bins/wallet-jobs",
     "bins/wallet-ws",
     "bins/wallet-chain-gateway",
+    "bins/wallet-solana-ata",
 ]
 
 [workspace.package]

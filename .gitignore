@@ -5,3 +5,4 @@
 .vscode
 *.swp
 .DS_Store
+configs/wallet-solana-ata.yaml
