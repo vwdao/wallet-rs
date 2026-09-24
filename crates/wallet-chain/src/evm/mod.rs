@@ -468,9 +468,9 @@ fn hex_u256_decimal(hex: &str) -> Decimal {
     }
 }
 
-/// Compute the native gas fee paid (`gasUsed * effectiveGasPrice`) from a
-/// transaction receipt. Falls back to `gasPrice` on providers without
-/// `effectiveGasPrice`.
+/// Compute the native gas fee paid from a receipt. OP Stack receipts expose
+/// the data-availability charge separately as `l1Fee`; Nitro includes it in
+/// `gasUsed` and normally does not expose a separate fee.
 fn receipt_gas_fee(receipt: &Value) -> Option<Amount> {
     let gas_used = receipt
         .get("gasUsed")
@@ -481,8 +481,16 @@ fn receipt_gas_fee(receipt: &Value) -> Option<Amount> {
         .or_else(|| receipt.get("gasPrice"))
         .and_then(|v| v.as_str())
         .and_then(|h| u128::from_str_radix(h.trim_start_matches("0x"), 16).ok())?;
+    let l2_fee = (gas_used as u128).checked_mul(gas_price)?;
+    let l1_fee = match receipt.get("l1Fee") {
+        Some(value) if !value.is_null() => {
+            u128::from_str_radix(value.as_str()?.trim_start_matches("0x"), 16).ok()?
+        }
+        _ => 0,
+    };
     Some(Amount::new(
-        wallet_types::decimal_from_u128(gas_used as u128 * gas_price),
+        wallet_types::decimal_from_u128(l2_fee)
+            .checked_add(wallet_types::decimal_from_u128(l1_fee))?,
         18,
     ))
 }
@@ -562,5 +570,28 @@ mod tests {
     fn test_receipt_gas_fee_missing_fields() {
         assert!(receipt_gas_fee(&json!({})).is_none());
         assert!(receipt_gas_fee(&json!({ "gasUsed": "0x5208" })).is_none());
+    }
+
+    #[test]
+    fn test_receipt_gas_fee_includes_separate_l1_fee() {
+        let receipt = json!({
+            "gasUsed": "0x5208",
+            "effectiveGasPrice": "0x3b9aca00",
+            "l1Fee": "0x64",
+        });
+        assert_eq!(
+            receipt_gas_fee(&receipt).unwrap().raw,
+            Decimal::from(21_000u64 * 1_000_000_000u64 + 100)
+        );
+    }
+
+    #[test]
+    fn test_receipt_gas_fee_rejects_invalid_l1_fee() {
+        let receipt = json!({
+            "gasUsed": "0x5208",
+            "effectiveGasPrice": "0x1",
+            "l1Fee": "invalid",
+        });
+        assert!(receipt_gas_fee(&receipt).is_none());
     }
 }
