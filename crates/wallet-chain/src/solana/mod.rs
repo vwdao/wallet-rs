@@ -160,20 +160,7 @@ impl BlockSource for SolanaChain {
     /// Fetch block transactions using `transactionDetails: "full"` so that SPL
     /// token transfers can be derived from pre/post token balance deltas.
     async fn fetch_block_txs(&self, height: u64) -> AppResult<Vec<NormalizedTx>> {
-        let result = self
-            .rpc(
-                "getBlock",
-                json!([
-                    height,
-                    {
-                        "encoding": "json",
-                        "transactionDetails": "full",
-                        "rewards": false,
-                        "maxSupportedTransactionVersion": 0
-                    }
-                ]),
-            )
-            .await?;
+        let result = self.rpc("getBlock", get_block_params(height)).await?;
         let txs = result
             .get("transactions")
             .and_then(|s| s.as_array())
@@ -188,6 +175,20 @@ impl BlockSource for SolanaChain {
         }
         Ok(out)
     }
+}
+
+/// `getBlock` params. With a lower `maxSupportedTransactionVersion` the node
+/// rejects any block that contains a v1 transaction (Agave 4.3+).
+fn get_block_params(height: u64) -> Value {
+    json!([
+        height,
+        {
+            "encoding": "json",
+            "transactionDetails": "full",
+            "rewards": false,
+            "maxSupportedTransactionVersion": 1
+        }
+    ])
 }
 
 /// Expand one getBlock transaction into native + SPL balance-delta rows only
@@ -1213,6 +1214,33 @@ mod tests {
                 && r.from.as_ref().map(|a| a.as_str()) != Some("temp")
         }));
         assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn get_block_accepts_v1_transactions() {
+        let params = get_block_params(42);
+        assert_eq!(params[0], json!(42));
+        assert_eq!(params[1]["maxSupportedTransactionVersion"], json!(1));
+        assert_eq!(params[1]["encoding"], json!("json"));
+    }
+
+    #[test]
+    fn v1_transaction_json_is_parsed_like_v0() {
+        // Agave encodes a v1 message as UiRawMessage with transactionConfig and
+        // no addressTableLookups; meta has no loadedAddresses.
+        let mut tx = native_tx(
+            vec!["alice", "bob", SYSTEM],
+            vec![10_000_000, 1_000_000, 1],
+            vec![8_995_000, 2_000_000, 1],
+            5_000,
+        );
+        tx["version"] = json!(1);
+        tx["transaction"]["message"]["transactionConfig"] = json!({ "computeUnitLimit": 200000 });
+        let rows = expand_solana_tx(7, &tx);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].from.as_ref().unwrap().as_str(), "alice");
+        assert_eq!(rows[0].to.as_ref().unwrap().as_str(), "bob");
+        assert_eq!(rows[0].value.raw, Decimal::from(1_000_000u64));
     }
 
     #[test]
