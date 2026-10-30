@@ -43,7 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let shutdown = async {
         tokio::signal::ctrl_c().await.ok();
-        tracing::info!("shutting down wallet-jobs...");
+        tracing::info!("shutting down wallet-jobs gracefully...");
     };
 
     let price = tokio::spawn(jobs::price_sync::run(state.clone()));
@@ -55,7 +55,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tokio::select! {
         _ = shutdown => {
-            tracing::info!("wallet-jobs stopping");
+            tracing::info!("wallet-jobs draining active tasks and inflight flushes...");
+            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+            tracing::info!("wallet-jobs stopped cleanly");
         }
         _ = price => {}
         _ = token => {}

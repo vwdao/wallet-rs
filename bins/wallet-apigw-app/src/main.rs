@@ -54,8 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let cfg: GatewayConfig = load_yaml(&args.config)?;
     let channel = tonic::transport::Endpoint::from_shared(cfg.grpc_endpoint.clone())?
-        .connect()
-        .await?;
+        .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
+        .http2_keep_alive_interval(std::time::Duration::from_secs(30))
+        .keep_alive_timeout(std::time::Duration::from_secs(10))
+        .keep_alive_while_idle(true)
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_lazy();
 
     let state = Arc::new(GwState {
         cfg: cfg.clone(),
@@ -92,8 +97,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let auth_router = Router::with_path("v1")
         .push(Router::with_path("tokens").get(handler::list_tokens))
+        .push(Router::with_path("tokens/check-recipient").post(handler::check_recipient))
+        .push(Router::with_path("tokens/balances-batch").post(handler::list_token_balances_batch))
         .push(Router::with_path("balances").get(handler::get_balances))
         .push(Router::with_path("transactions").get(handler::list_txs))
+        .push(Router::with_path("transactions/filter").get(handler::transactions_by_filter))
+        .push(Router::with_path("transactions/summary").get(handler::transactions_from_summary))
+        .push(Router::with_path("transactions/{chain_index}/{txn}").get(handler::get_transaction_detail))
         .push(Router::with_path("transactions/broadcast").post(handler::broadcast))
         .push(Router::with_path("swap/quote").post(handler::swap_quote))
         .push(Router::with_path("gaspool/{chain_index}").get(handler::gas_pool))
@@ -101,6 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .push(Router::with_path("transactions/estimate-gas").post(handler::estimate_gas))
         .push(Router::with_path("rent/estimate").post(handler::rent_estimate))
         .push(Router::with_path("dapps").get(handler::list_dapps))
+        .push(Router::with_path("dapps/approvals").get(handler::list_dapp_approvals))
+        .push(Router::with_path("dapps/search").get(handler::search_dapps))
         .hoop(middleware::require_app_jwt);
 
     let public_router = Router::with_path("v1")
@@ -108,6 +120,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .push(Router::with_path("market/price").get(handler::price))
         .push(Router::with_path("market/klines").get(handler::klines))
         .push(Router::with_path("cms/config").get(handler::app_config))
+        .push(Router::with_path("cms/version").get(handler::check_app_version))
+        .push(Router::with_path("cms/geo").get(handler::check_geo))
         .push(Router::with_path("cms/guides").get(handler::list_guides))
         .push(Router::with_path("users/register").post(handler::register))
         .push(Router::with_path("users/addresses").get(handler::list_addresses))
@@ -116,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .push(Router::with_path("healthz").get(handler::healthz))
         .push(Router::with_path("metrics").get(handler::metrics))
+        .push(Router::with_path("metrics/prometheus").get(handler::metrics_prometheus))
         .push(auth_router)
         .push(public_router)
         .hoop(StateInjector(state))

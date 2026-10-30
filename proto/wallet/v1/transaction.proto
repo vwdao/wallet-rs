@@ -8,6 +8,9 @@ service TransactionService {
   rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse);
   rpc Broadcast(BroadcastRequest) returns (BroadcastResponse);
   rpc EstimateGas(EstimateGasRequest) returns (EstimateGasResponse);
+  rpc TransactionsByFilter(TransactionsByFilterRequest) returns (TransactionsByFilterResponse);
+  rpc TransactionsFromSummary(TransactionsByFilterRequest) returns (TransactionsSummaryResponse);
+  rpc GetTransactionDetail(GetTransactionDetailRequest) returns (TransactionDetail);
 }
 
 message Transaction {
@@ -22,6 +25,9 @@ message Transaction {
   string method = 9;
   uint64 log_index = 10;
   string gas_fee = 11;
+  int64 timestamp = 12;
+  string price = 13;
+  string native_price = 14;
 }
 
 message GetTransactionRequest {
@@ -61,4 +67,100 @@ message EstimateGasResponse {
   uint64 gas_limit = 1;
   string max_fee_per_gas = 2;
   string max_priority_fee_per_gas = 3;
+}
+
+message TransactionsByFilterRequest {
+  int64 chain_index = 1;
+  string addresses = 2;
+  optional int64 status = 3;
+  optional string token_address = 4;
+  optional string keyword = 5;
+  optional string transfer_type = 6; // from, to
+  int64 page = 7;
+  int64 limit = 8;
+  int64 start_time = 9;
+  int64 end_time = 10;
+  optional bool include_spam = 11;
+  optional bool is_spam = 12;
+}
+
+message TransactionsByFilterResponse {
+  int64 count = 1;
+  repeated Transaction list = 2;
+}
+
+message TransactionSummary {
+  string txn = 1;
+  int64 chain_index = 2;
+  string chain_name = 3;
+  string from_address = 4;
+  string to_address = 5;
+  string value = 6;
+  string fee = 7;
+  string tx_type = 8;
+  string token_address = 9;
+  int64 timestamp = 10;
+  string status = 11;
+  int64 block_number = 12;
+  int64 token_decimal = 13;
+  string token_symbol = 14;
+  string token_logo_url = 15;
+  string token_name = 16;
+  string risk_level = 17;
+  bool is_spam = 18;
+  string price = 19;
+  string native_price = 20;
+}
+
+message TransactionsSummaryResponse {
+  int64 count = 1;
+  repeated TransactionSummary list = 2;
+}
+
+message GetTransactionDetailRequest {
+  int64 chain_index = 1;
+  string txn = 2;
+  optional string from_address = 3;
+  optional string to_address = 4;
+  optional string token_address = 5;
+  bool verify_from_chain = 6;
+}
+
+message TxRefGasPool {
+  string gas = 1;
+  string gas_usdt = 2;
+  string native_tx_hash = 3;
+  string native_tx_value = 4;
+  string native_tx_value_usdt = 5;
+  string native_tx_gas = 6;
+  string native_tx_gas_usdt = 7;
+  string status = 8;
+  string price = 9;
+  string activate_fee = 10;
+  string activate_fee_usdt = 11;
+  string energy = 12;
+  string energy_trx = 13;
+  string energy_usdt = 14;
+  string bandwidth = 15;
+  string bandwidth_trx = 16;
+  string bandwidth_usdt = 17;
+  string bandwidth_price = 18;
+}
+
+message TransactionDetail {
+  string txn = 1;
+  string from_address = 2;
+  string to_address = 3;
+  string value = 4;
+  string fee = 5;
+  string tx_type = 6;
+  string token_address = 7;
+  int64 timestamp = 8;
+  string status = 9;
+  int64 block_number = 10;
+  int64 chain_index = 11;
+  bool use_gaspool = 12;
+  TxRefGasPool gaspool = 13;
+  string price = 14;
+  string native_price = 15;
 }

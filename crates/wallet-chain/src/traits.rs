@@ -10,6 +10,20 @@ pub trait BalanceReader: Send + Sync {
 #[async_trait]
 pub trait TokenBalance: Send + Sync {
     async fn token_balance(&self, wallet: &Address, token: &Address) -> AppResult<Amount>;
+
+    /// Batch query token balances for a wallet in a single or batched RPC call where supported.
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        let mut out = Vec::with_capacity(tokens.len());
+        for t in tokens {
+            let bal = self.token_balance(wallet, t).await?;
+            out.push((t.clone(), bal));
+        }
+        Ok(out)
+    }
 }
 
 #[async_trait]

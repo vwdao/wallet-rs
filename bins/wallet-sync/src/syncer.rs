@@ -121,7 +121,7 @@ async fn tick(
 
     if let Some(s) = &setting {
         if !s.enabled {
-            tracing::debug!(chain = %rt.chain_index, "sync disabled via db settings");
+            tracing::warn!(chain = %rt.chain_index, "sync disabled via db settings (sync_settings table)");
             return Ok(TickOutcome {
                 poll_ms,
                 last_synced: None,
@@ -160,6 +160,20 @@ async fn tick(
             None => safe.saturating_sub(1),
         };
         tracing::info!(chain = %rt.chain_index, height = cursor + 1, "initializing sync cursor");
+    }
+
+    if cursor >= safe {
+        static LAST_LOGGED_TIP: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let prev = LAST_LOGGED_TIP.swap(tip, std::sync::atomic::Ordering::Relaxed);
+        if prev != tip {
+            tracing::info!(
+                chain = %rt.chain_index,
+                cursor,
+                safe,
+                tip,
+                "syncer is up to date, waiting for new blocks"
+            );
+        }
     }
 
     if cursor > safe {

@@ -100,12 +100,15 @@ impl FreeRpcSyncer {
     }
 
     async fn sync_evm_network(&self, network: &Network) -> AppResult<ChainSyncResult> {
-        let evm_chain_id = network.evm_chain_id.ok_or_else(|| {
-            AppError::InvalidArgument(format!(
-                "network {} missing evm_chain_id",
-                network.chain_index
-            ))
-        })?;
+        let evm_chain_id = network
+            .evm_chain_id
+            .or_else(|| if network.chain_index == 60 { Some(1) } else { None })
+            .ok_or_else(|| {
+                AppError::InvalidArgument(format!(
+                    "network {} missing evm_chain_id",
+                    network.chain_index
+                ))
+            })?;
 
         let payload = self
             .http

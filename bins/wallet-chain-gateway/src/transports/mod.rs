@@ -71,16 +71,25 @@ pub async fn probe(
     family: &str,
 ) -> AppResult<(i32, Option<i64>)> {
     let (protocol, parsed) = parse_endpoint_url_with(url, protocol)?;
-    let body = serde_json::json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": method,
-        "params": crate::health::probe_params_for_chain(family),
-    });
+    let (probe_url, body) = if family == "tron" && protocol == EndpointProtocol::Http {
+        let full = if url.ends_with("/wallet/getnowblock") || url.ends_with("/wallet/getnowblock/") {
+            url.to_string()
+        } else {
+            format!("{}/wallet/getnowblock", url.trim_end_matches('/'))
+        };
+        (full, serde_json::json!({}))
+    } else {
+        (url.to_string(), serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": crate::health::probe_params_for_chain(family),
+        }))
+    };
     let start = std::time::Instant::now();
     let result = match protocol {
         EndpointProtocol::Http => {
-            let v = http::execute(http, url, &body, headers, Duration::from_secs(5)).await?;
+            let v = http::execute(http, &probe_url, &body, headers, Duration::from_secs(5)).await?;
             parse_probe_result(&v, family)
         }
         EndpointProtocol::WebSocket => {
@@ -109,8 +118,8 @@ fn parse_probe_result(v: &Value, family: &str) -> wallet_error::AppResult<Option
             "rpc probe returned error: {err}"
         )));
     }
-    let result = v.get("result").cloned().unwrap_or(Value::Null);
-    Ok(parse_block_height(&result, family))
+    let result = v.get("result").unwrap_or(v);
+    Ok(parse_block_height(result, family))
 }
 
 fn parse_block_height(result: &Value, family: &str) -> Option<i64> {

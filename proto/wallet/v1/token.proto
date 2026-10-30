@@ -7,6 +7,9 @@ service TokenService {
   rpc GetToken(GetTokenRequest) returns (Token);
   rpc ListTokens(ListTokensRequest) returns (ListTokensResponse);
   rpc GetBalances(GetBalancesRequest) returns (GetBalancesResponse);
+  rpc CheckRecipient(CheckRecipientRequest) returns (CheckRecipientResponse);
+  rpc ListTokenBalance(ListTokenBalanceRequest) returns (ListTokenBalanceResponse);
+  rpc QueryTxLatestToken(QueryTxLatestTokenRequest) returns (QueryTxLatestTokenResponse);
 }
 
 message Token {
@@ -48,4 +51,97 @@ message BalanceItem {
 
 message GetBalancesResponse {
   repeated BalanceItem items = 1;
+}
+
+// Recipient Check
+message CheckRecipientRequest {
+  int64 chain_index = 1;
+  string address = 2;
+  string sender_address = 3;
+  string current_token_contract = 4;
+  repeated string reference_addresses = 5;
+  bool trusted_recipient = 6;
+}
+
+message RecipientCheckItem {
+  string kind = 1;
+  string outcome = 2; // matched, not_matched, unknown, skipped
+  string action = 3;  // none, warn, block
+  string source = 4;
+  int64 checked_at_ms = 5;
+  int64 expires_at_ms = 6;
+}
+
+message CheckRecipientResponse {
+  string action = 1; // pass, warn, block
+  string reason = 2;
+  bool complete = 3;
+  string rules_version = 4;
+  int64 valid_until_ms = 5;
+  repeated RecipientCheckItem items = 6;
+  int32 similarity_prefix = 7;
+  int32 similarity_suffix = 8;
+  repeated string black_hole_addresses = 9;
+}
+
+// Multi-wallet, multi-chain balance query
+message WalletAddressWithChains {
+  string address = 1;
+  repeated int64 chain_indexes = 2;
+}
+
+message ListTokenBalanceRequest {
+  repeated WalletAddressWithChains addresses = 1;
+}
+
+message TokenBalanceDetail {
+  int64 chain_index = 1;
+  string address = 2;
+  string name = 3;
+  string symbol = 4;
+  int64 decimals = 5;
+  string raw_balance = 6;
+  string price = 7;
+  string logo_url = 8;
+  bool is_official = 9;
+}
+
+message WalletBalanceEntry {
+  string address = 1;
+  repeated TokenBalanceDetail balances = 2;
+}
+
+message ListTokenBalanceResponse {
+  repeated WalletBalanceEntry list = 1;
+}
+
+// Recent active token queries
+message WalletAddressChain {
+  string address = 1;
+  int64 chain_index = 2;
+}
+
+message QueryTxLatestTokenRequest {
+  repeated WalletAddressChain chains = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  string time_aggregation = 4; // none, day, week, month
+}
+
+message TokenWithWallet {
+  string wallet_address = 1;
+  int64 chain_index = 2;
+  string name = 3;
+  string symbol = 4;
+  int64 decimals = 5;
+  string logo_url = 6;
+  string address = 7;
+  string chain_id = 8;
+  int64 last_tx_timestamp = 9;
+  int64 period_start = 10;
+  bool is_official = 11;
+}
+
+message QueryTxLatestTokenResponse {
+  repeated TokenWithWallet list = 1;
 }

@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cfg: SyncConfig = load_yaml(&args.config)?;
     let db = Db::connect(&cfg.database).await?;
     if let Err(e) = db.migrate().await {
-        tracing::warn!("schema push skipped: {e}");
+        tracing::debug!("schema push skipped: {e}");
     }
     let redis = wallet_db::RedisStore::connect(&cfg.redis).await?;
     let registry = build_registry(std::slice::from_ref(&cfg.chain))?;

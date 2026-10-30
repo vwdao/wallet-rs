@@ -770,4 +770,29 @@ impl TokenBalance for TronChain {
         }
         Ok(Amount::zero(6))
     }
+
+    /// Concurrent batch query across endpoints for TRON tokens
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+        let handles: Vec<_> = tokens
+            .iter()
+            .map(|t| {
+                let token = t.clone();
+                async move {
+                    let bal = self
+                        .token_balance(wallet, &token)
+                        .await
+                        .unwrap_or_else(|_| Amount::zero(6));
+                    (token, bal)
+                }
+            })
+            .collect();
+        Ok(futures::future::join_all(handles).await)
+    }
 }

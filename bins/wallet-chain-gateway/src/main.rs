@@ -225,13 +225,8 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
         let params = body.get("params").cloned().unwrap_or(Value::Null);
         let id = body.get("id").cloned().unwrap_or(Value::Null);
 
-        let next_total_requests = key_row.total_requests.saturating_add(1);
-        let mut counter_db = st.db.clone_inner();
-        let _ = key_row
-            .update()
-            .total_requests(next_total_requests)
-            .exec(&mut counter_db)
-            .await;
+        // total_requests is asynchronously aggregated and flushed in batches
+        // by st.stats (StatsCollector), eliminating row locks and DB write overhead.
 
         let start = Instant::now();
         let timeout = Duration::from_secs(cfg.rpc_timeout_secs);

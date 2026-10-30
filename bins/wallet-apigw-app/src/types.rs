@@ -367,3 +367,221 @@ pub struct MetricsResponse {
     /// Events published
     pub events_published: u64,
 }
+
+// ─────────────────────── Recipient Check ───────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CheckRecipientBody {
+    pub chain_index: i64,
+    pub address: String,
+    pub sender_address: String,
+    pub current_token_contract: Option<String>,
+    pub reference_addresses: Option<Vec<String>>,
+    pub trusted_recipient: Option<bool>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RecipientCheckItemDto {
+    pub kind: String,
+    pub outcome: String,
+    pub action: String,
+    pub source: String,
+    pub checked_at_ms: i64,
+    pub expires_at_ms: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CheckRecipientResponse {
+    pub action: String,
+    pub reason: String,
+    pub complete: bool,
+    pub rules_version: String,
+    pub valid_until_ms: i64,
+    pub items: Vec<RecipientCheckItemDto>,
+    pub similarity_prefix: i32,
+    pub similarity_suffix: i32,
+    pub black_hole_addresses: Vec<String>,
+}
+
+// ─────────────────────── Batch Balances ───────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct WalletAddressChainsDto {
+    pub address: String,
+    pub chain_indexes: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct BatchBalancesBody {
+    pub addresses: Vec<WalletAddressChainsDto>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TokenBalanceDetailDto {
+    pub chain_index: i64,
+    pub address: String,
+    pub name: String,
+    pub symbol: String,
+    pub decimals: i64,
+    pub raw_balance: String,
+    pub price: String,
+    pub logo_url: String,
+    pub is_official: bool,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct WalletBalanceEntryDto {
+    pub address: String,
+    pub balances: Vec<TokenBalanceDetailDto>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct BatchBalancesResponse {
+    pub list: Vec<WalletBalanceEntryDto>,
+}
+
+// ─────────────────────── Version Check ───────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct VersionCheckQuery {
+    pub platform: String,
+    pub version: String,
+    pub locale: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct VersionCheckResponse {
+    pub need_update: bool,
+    pub force_update: bool,
+    pub latest_version: String,
+    pub min_version: String,
+    pub download_url: String,
+    pub title: String,
+    pub description: String,
+}
+
+// ─────────────────────── Geo & IP Check ───────────────────────
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct GeoCheckResponse {
+    pub is_allowed: bool,
+    pub country_code: String,
+    pub country_name: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct IpAccessResponse {
+    pub is_whitelisted: bool,
+    pub is_blocked: bool,
+    pub reason: String,
+}
+
+// ─────────────────────── Transactions Filter & Summary ───────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct TransactionsFilterQuery {
+    pub chain_index: Option<i64>,
+    pub addresses: String,
+    pub status: Option<i64>,
+    pub token_address: Option<String>,
+    pub keyword: Option<String>,
+    pub transfer_type: Option<String>,
+    pub page: Option<i64>,
+    pub limit: Option<i64>,
+    pub start_time: Option<i64>,
+    pub end_time: Option<i64>,
+    pub include_spam: Option<bool>,
+    pub is_spam: Option<bool>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TransactionsFilterResponse {
+    pub count: i64,
+    pub list: Vec<TransactionInfo>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TransactionSummaryDto {
+    pub txn: String,
+    pub chain_index: i64,
+    pub chain_name: String,
+    pub from_address: String,
+    pub to_address: String,
+    pub value: String,
+    pub fee: String,
+    pub tx_type: String,
+    pub token_address: String,
+    pub timestamp: i64,
+    pub status: String,
+    pub block_number: i64,
+    pub token_decimal: i64,
+    pub token_symbol: String,
+    pub token_logo_url: String,
+    pub token_name: String,
+    pub risk_level: String,
+    pub is_spam: bool,
+    pub price: String,
+    pub native_price: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TransactionsSummaryResponse {
+    pub count: i64,
+    pub list: Vec<TransactionSummaryDto>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TransactionDetailResponse {
+    pub txn: String,
+    pub from_address: String,
+    pub to_address: String,
+    pub value: String,
+    pub fee: String,
+    pub tx_type: String,
+    pub token_address: String,
+    pub timestamp: i64,
+    pub status: String,
+    pub block_number: i64,
+    pub chain_index: i64,
+    pub use_gaspool: bool,
+    pub price: String,
+    pub native_price: String,
+}
+
+// ─────────────────────── DApp Approvals & Search ───────────────────────
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DappApprovalsQuery {
+    pub chain_index: i64,
+    pub address: String,
+    pub page: Option<u32>,
+    pub page_size: Option<u32>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TokenApprovalItemDto {
+    pub chain_index: i64,
+    pub dapp_name: String,
+    pub dapp_url: String,
+    pub spender_address: String,
+    pub token_address: String,
+    pub token_symbol: String,
+    pub allowance: String,
+    pub is_unlimited: bool,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DappApprovalsResponse {
+    pub items: Vec<TokenApprovalItemDto>,
+    pub meta: PageMeta,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DappSearchQuery {
+    pub query: String,
+    pub chain_index: Option<i64>,
+    pub page: Option<u32>,
+    pub page_size: Option<u32>,
+}

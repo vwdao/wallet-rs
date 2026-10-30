@@ -11,6 +11,10 @@ use std::str::FromStr;
 pub struct ChainIndex(pub i64);
 
 impl ChainIndex {
+    pub const fn new(val: i64) -> Self {
+        Self(val)
+    }
+
     pub const BTC: Self = Self(0);
     pub const DOGE: Self = Self(3);
     pub const ETH: Self = Self(60);
@@ -135,8 +139,24 @@ impl Address {
         Self(s.into())
     }
 
+    pub fn parse(s: &str) -> Result<Self, ParseError> {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            return Err(ParseError::Address("address cannot be empty".into()));
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl FromStr for Address {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s)
     }
 }
 
@@ -182,6 +202,10 @@ impl Amount {
             raw: Decimal::ZERO,
             decimals,
         }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.raw.is_zero()
     }
 }
 
@@ -286,6 +310,8 @@ pub struct GasEstimate {
 pub enum ParseError {
     #[error("invalid chain index: {0}")]
     ChainIndex(String),
+    #[error("invalid address: {0}")]
+    Address(String),
 }
 
 impl FromStr for ChainIndex {

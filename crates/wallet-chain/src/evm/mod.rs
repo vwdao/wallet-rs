@@ -17,6 +17,8 @@ use wallet_types::{
 };
 
 mod internal;
+pub mod multicall;
+pub use multicall::*;
 
 #[derive(Debug)]
 pub struct EvmChain {
@@ -24,6 +26,7 @@ pub struct EvmChain {
     pub chain_id: u64,
     pub pool: RpcPool,
     pub confirmations: u64,
+    pub decimals_cache: Arc<parking_lot::RwLock<HashMap<String, u32>>>,
 }
 
 impl EvmChain {
@@ -39,38 +42,82 @@ impl EvmChain {
             chain_id,
             pool: RpcPool::new(cfg.endpoints.clone())?,
             confirmations: cfg.confirmations,
+            decimals_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
         }))
     }
 
     async fn rpc(&self, method: &str, params: Value) -> AppResult<Value> {
-        let url = self.pool.next_url()?.to_string();
-        let body = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": method,
-            "params": params,
-        });
-        let resp = self
-            .pool
-            .client()
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
+        let attempts = self.pool.len().max(1);
+        let mut last_err = None;
+
+        for _ in 0..attempts {
+            let url = match self.pool.next_url() {
+                Ok(u) => u.to_string(),
+                Err(e) => return Err(e),
+            };
+            let body = json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": method,
+                "params": params.clone(),
+            });
+            let resp = match self
+                .pool
+                .client()
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!("{url}: {e}")));
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            if !status.is_success() {
+                let text = resp.text().await.unwrap_or_default();
                 self.pool.mark_failure(&url);
-                AppError::Unavailable(e.to_string())
-            })?;
-        let v: Value = resp.json().await.map_err(|e| {
-            self.pool.mark_failure(&url);
-            AppError::Unavailable(e.to_string())
-        })?;
-        if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
-            self.pool.mark_failure(&url);
-            return Err(AppError::Unavailable(err.to_string()));
+                last_err = Some(AppError::Unavailable(format!(
+                    "rpc {url} returned HTTP {status}: {text}"
+                )));
+                continue;
+            }
+
+            let text = match resp.text().await {
+                Ok(t) => t,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!("read {url} body failed: {e}")));
+                    continue;
+                }
+            };
+
+            let v: Value = match serde_json::from_str(&text) {
+                Ok(v) => v,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!(
+                        "decode json from {url} failed: {e}; raw: {text}"
+                    )));
+                    continue;
+                }
+            };
+
+            if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
+                self.pool.mark_failure(&url);
+                last_err = Some(AppError::Unavailable(format!("{url} rpc error: {err}")));
+                continue;
+            }
+
+            self.pool.mark_success(&url);
+            return Ok(v.get("result").cloned().unwrap_or(Value::Null));
         }
-        self.pool.mark_success(&url);
-        Ok(v.get("result").cloned().unwrap_or(Value::Null))
+
+        Err(last_err.unwrap_or_else(|| AppError::Unavailable("all rpc attempts failed".into())))
     }
 
     /// Best-effort RPC call that does not trip the circuit breaker. Used for
@@ -94,6 +141,119 @@ impl EvmChain {
             None => Some(v.get("result").cloned().unwrap_or(Value::Null)),
         }
     }
+
+    /// Send batched JSON-RPC 2.0 requests in a single HTTP POST to minimize round trips.
+    pub async fn batch_rpc(&self, calls: Vec<(&str, Value)>) -> AppResult<Vec<Value>> {
+        if calls.is_empty() {
+            return Ok(Vec::new());
+        }
+        let attempts = self.pool.len().max(1);
+        let mut last_err = None;
+
+        for _ in 0..attempts {
+            let url = match self.pool.next_url() {
+                Ok(u) => u.to_string(),
+                Err(e) => return Err(e),
+            };
+            let body: Vec<Value> = calls
+                .iter()
+                .enumerate()
+                .map(|(id, (method, params))| {
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "method": *method,
+                        "params": params.clone(),
+                    })
+                })
+                .collect();
+
+            let resp = match self
+                .pool
+                .client()
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!("{url}: {e}")));
+                    continue;
+                }
+            };
+
+            let status = resp.status();
+            if !status.is_success() {
+                let text = resp.text().await.unwrap_or_default();
+                self.pool.mark_failure(&url);
+                last_err = Some(AppError::Unavailable(format!(
+                    "batch rpc {url} returned HTTP {status}: {text}"
+                )));
+                continue;
+            }
+
+            let text = match resp.text().await {
+                Ok(t) => t,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!("read {url} body failed: {e}")));
+                    continue;
+                }
+            };
+
+            let array: Vec<Value> = match serde_json::from_str(&text) {
+                Ok(a) => a,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!(
+                        "decode batch json from {url} failed: {e}; raw: {text}"
+                    )));
+                    continue;
+                }
+            };
+
+            self.pool.mark_success(&url);
+
+            let mut results: Vec<Value> = vec![Value::Null; calls.len()];
+            for item in array {
+                if let Some(id) = item.get("id").and_then(|i| i.as_u64()) {
+                    if (id as usize) < results.len() {
+                        results[id as usize] = item.get("result").cloned().unwrap_or(Value::Null);
+                    }
+                }
+            }
+            return Ok(results);
+        }
+
+        Err(last_err.unwrap_or_else(|| AppError::Unavailable("all batch rpc attempts failed".into())))
+    }
+
+    /// Execute a Multicall3 batch query via on-chain contract call.
+    pub async fn multicall3(&self, calls: &[Multicall3Call]) -> AppResult<Vec<Multicall3Result>> {
+        if calls.is_empty() {
+            return Ok(Vec::new());
+        }
+        let calldata = encode_aggregate3(calls);
+        let calldata_hex = format!("0x{}", hex::encode(calldata));
+        let result = self
+            .rpc(
+                "eth_call",
+                json!([
+                    {
+                        "to": MULTICALL3_ADDRESS,
+                        "data": calldata_hex,
+                    },
+                    "latest"
+                ]),
+            )
+            .await?;
+
+        let hex_str = result.as_str().unwrap_or("0x").trim_start_matches("0x");
+        let bytes = hex::decode(hex_str).map_err(|e| AppError::internal(e.to_string()))?;
+        decode_aggregate3(&bytes).ok_or_else(|| AppError::internal("failed to decode multicall3 return data"))
+    }
 }
 
 #[async_trait]
@@ -112,7 +272,39 @@ impl BalanceReader for EvmChain {
 #[async_trait]
 impl TokenBalance for EvmChain {
     async fn token_balance(&self, wallet: &Address, token: &Address) -> AppResult<Amount> {
-        // First, fetch decimals from the token contract: decimals() = 0x313ce567
+        let cached_decimals = self.decimals_cache.read().get(token.as_str()).copied();
+        if let Some(dec) = cached_decimals {
+            // Decimals is already known from cache, only 1 balanceOf eth_call needed!
+            let mut data = String::from("0x70a08231");
+            let addr = wallet.as_str().trim_start_matches("0x");
+            data.push_str(&format!("{:0>64}", addr));
+            let result = self
+                .rpc(
+                    "eth_call",
+                    json!([{ "to": token.as_str(), "data": data }, "latest"]),
+                )
+                .await?;
+            let hex = result.as_str().unwrap_or("0x0");
+            let raw = u128::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap_or(0);
+            return Ok(Amount::new(wallet_types::decimal_from_u128(raw), dec));
+        }
+
+        // Decimals not cached: use Multicall3 to fetch decimals() AND balanceOf() in ONE SINGLE eth_call!
+        let calls = vec![
+            build_decimals_call(token),
+            build_balance_of_call(token, wallet),
+        ];
+
+        if let Ok(results) = self.multicall3(&calls).await {
+            if results.len() == 2 && results[0].success && results[1].success {
+                let dec = parse_decimals_from_bytes(&results[0].return_data);
+                self.decimals_cache.write().insert(token.as_str().to_string(), dec);
+                let bal_dec = parse_u256_to_decimal(&results[1].return_data);
+                return Ok(Amount::new(bal_dec, dec));
+            }
+        }
+
+        // Fallback if Multicall3 is not deployed / reverts on target network:
         let decimals_result = self
             .rpc(
                 "eth_call",
@@ -124,8 +316,8 @@ impl TokenBalance for EvmChain {
             .and_then(|r| r.as_str().map(|s| s.to_string()))
             .and_then(|hex| u32::from_str_radix(hex.trim_start_matches("0x"), 16).ok())
             .unwrap_or(18);
+        self.decimals_cache.write().insert(token.as_str().to_string(), decimals);
 
-        // balanceOf(address) selector 0x70a08231
         let mut data = String::from("0x70a08231");
         let addr = wallet.as_str().trim_start_matches("0x");
         data.push_str(&format!("{:0>64}", addr));
@@ -138,6 +330,113 @@ impl TokenBalance for EvmChain {
         let hex = result.as_str().unwrap_or("0x0");
         let raw = u128::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap_or(0);
         Ok(Amount::new(wallet_types::decimal_from_u128(raw), decimals))
+    }
+
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Strategy 1: Multicall3 (1 single on-chain eth_call for all decimals + all balances)
+        let mut mc_calls = Vec::with_capacity(tokens.len() * 2);
+        for t in tokens {
+            if !self.decimals_cache.read().contains_key(t.as_str()) {
+                mc_calls.push(build_decimals_call(t));
+            }
+            mc_calls.push(build_balance_of_call(t, wallet));
+        }
+
+        if let Ok(results) = self.multicall3(&mc_calls).await {
+            let mut res_idx = 0;
+            let mut out = Vec::with_capacity(tokens.len());
+            for t in tokens {
+                let dec = if let Some(&d) = self.decimals_cache.read().get(t.as_str()) {
+                    d
+                } else if res_idx < results.len() {
+                    let d_res = &results[res_idx];
+                    res_idx += 1;
+                    let d = if d_res.success {
+                        parse_decimals_from_bytes(&d_res.return_data)
+                    } else {
+                        18
+                    };
+                    self.decimals_cache.write().insert(t.as_str().to_string(), d);
+                    d
+                } else {
+                    18
+                };
+
+                let bal_dec = if res_idx < results.len() {
+                    let bal_res = &results[res_idx];
+                    res_idx += 1;
+                    if bal_res.success {
+                        parse_u256_to_decimal(&bal_res.return_data)
+                    } else {
+                        Decimal::ZERO
+                    }
+                } else {
+                    Decimal::ZERO
+                };
+                out.push((t.clone(), Amount::new(bal_dec, dec)));
+            }
+            return Ok(out);
+        }
+
+        // Strategy 2 (Fallback): JSON-RPC 2.0 array batching if Multicall3 is unavailable
+        let mut missing_decimals = Vec::new();
+        for t in tokens {
+            if !self.decimals_cache.read().contains_key(t.as_str()) {
+                missing_decimals.push(t);
+            }
+        }
+        if !missing_decimals.is_empty() {
+            let dec_calls: Vec<(&str, Value)> = missing_decimals
+                .iter()
+                .map(|t| {
+                    (
+                        "eth_call",
+                        json!([{ "to": t.as_str(), "data": "0x313ce567" }, "latest"]),
+                    )
+                })
+                .collect();
+            if let Ok(results) = self.batch_rpc(dec_calls).await {
+                let mut cache = self.decimals_cache.write();
+                for (t, res) in missing_decimals.into_iter().zip(results) {
+                    let d = res
+                        .as_str()
+                        .and_then(|hex| u32::from_str_radix(hex.trim_start_matches("0x"), 16).ok())
+                        .unwrap_or(18);
+                    cache.insert(t.as_str().to_string(), d);
+                }
+            }
+        }
+
+        let addr = wallet.as_str().trim_start_matches("0x");
+        let calldata = format!("0x70a08231{:0>64}", addr);
+        let bal_calls: Vec<(&str, Value)> = tokens
+            .iter()
+            .map(|t| {
+                (
+                    "eth_call",
+                    json!([{ "to": t.as_str(), "data": &calldata }, "latest"]),
+                )
+            })
+            .collect();
+
+        let results = self.batch_rpc(bal_calls).await?;
+        let cache = self.decimals_cache.read();
+        let mut out = Vec::with_capacity(tokens.len());
+        for (t, res) in tokens.iter().zip(results) {
+            let hex = res.as_str().unwrap_or("0x0");
+            let raw = u128::from_str_radix(hex.trim_start_matches("0x"), 16).unwrap_or(0);
+            let dec = cache.get(t.as_str()).copied().unwrap_or(18);
+            out.push((t.clone(), Amount::new(wallet_types::decimal_from_u128(raw), dec)));
+        }
+        Ok(out)
     }
 }
 
@@ -157,8 +456,14 @@ impl TxBroadcaster for EvmChain {
 impl BlockSource for EvmChain {
     async fn tip(&self) -> AppResult<u64> {
         let result = self.rpc("eth_blockNumber", json!([])).await?;
-        let hex = result.as_str().unwrap_or("0x0");
-        u64::from_str_radix(hex.trim_start_matches("0x"), 16)
+        let hex = result
+            .as_str()
+            .ok_or_else(|| AppError::Unavailable("eth_blockNumber returned non-string result".into()))?;
+        let trimmed = hex.trim_start_matches("0x");
+        if trimmed.is_empty() || trimmed == "0" {
+            return Err(AppError::Unavailable("eth_blockNumber returned 0x0 or empty".into()));
+        }
+        u64::from_str_radix(trimmed, 16)
             .map_err(|e| AppError::internal(e.to_string()))
     }
 

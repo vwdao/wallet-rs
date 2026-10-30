@@ -6,6 +6,8 @@ import "wallet/v1/common.proto";
 service DappService {
   rpc ListDapps(ListDappsRequest) returns (ListDappsResponse);
   rpc GetDapp(GetDappRequest) returns (Dapp);
+  rpc ListApprovalByUserAddress(ListApprovalByUserAddressRequest) returns (ListApprovalByUserAddressResponse);
+  rpc SearchDapp(SearchDappRequest) returns (ListDappsResponse);
 }
 
 message Dapp {
@@ -27,4 +29,33 @@ message ListDappsResponse {
 
 message GetDappRequest {
   string id = 1;
+}
+
+message ListApprovalByUserAddressRequest {
+  int64 chain_index = 1;
+  string address = 2;
+  Pagination pagination = 3;
+}
+
+message TokenApprovalItem {
+  int64 chain_index = 1;
+  string dapp_name = 2;
+  string dapp_url = 3;
+  string spender_address = 4;
+  string token_address = 5;
+  string token_symbol = 6;
+  string allowance = 7;
+  bool is_unlimited = 8;
+  int64 updated_at = 9;
+}
+
+message ListApprovalByUserAddressResponse {
+  repeated TokenApprovalItem items = 1;
+  PageMeta meta = 2;
+}
+
+message SearchDappRequest {
+  string query = 1;
+  optional int64 chain_index = 2;
+  Pagination pagination = 3;
 }

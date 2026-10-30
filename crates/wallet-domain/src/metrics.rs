@@ -71,6 +71,45 @@ impl Metrics {
             events_published: self.inner.events_published.load(Ordering::Relaxed),
         }
     }
+
+    /// Format collected metrics in standard Prometheus exposition text format.
+    pub fn prometheus_text(&self) -> String {
+        let snap = self.snapshot();
+        format!(
+            "# HELP wallet_requests_total Total number of HTTP/gRPC requests.\n\
+             # TYPE wallet_requests_total counter\n\
+             wallet_requests_total {}\n\
+             # HELP wallet_requests_success Total successful requests.\n\
+             # TYPE wallet_requests_success counter\n\
+             wallet_requests_success {}\n\
+             # HELP wallet_requests_error Total failed requests.\n\
+             # TYPE wallet_requests_error counter\n\
+             wallet_requests_error {}\n\
+             # HELP wallet_db_queries_total Total DB queries executed.\n\
+             # TYPE wallet_db_queries_total counter\n\
+             wallet_db_queries_total {}\n\
+             # HELP wallet_db_queries_error Total failed DB queries.\n\
+             # TYPE wallet_db_queries_error counter\n\
+             wallet_db_queries_error {}\n\
+             # HELP wallet_rpc_calls_total Total upstream RPC calls.\n\
+             # TYPE wallet_rpc_calls_total counter\n\
+             wallet_rpc_calls_total {}\n\
+             # HELP wallet_rpc_calls_error Total failed upstream RPC calls.\n\
+             # TYPE wallet_rpc_calls_error counter\n\
+             wallet_rpc_calls_error {}\n\
+             # HELP wallet_events_published Total domain events published.\n\
+             # TYPE wallet_events_published counter\n\
+             wallet_events_published {}\n",
+            snap.requests_total,
+            snap.requests_success,
+            snap.requests_error,
+            snap.db_queries_total,
+            snap.db_queries_error,
+            snap.rpc_calls_total,
+            snap.rpc_calls_error,
+            snap.events_published
+        )
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

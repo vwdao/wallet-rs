@@ -61,7 +61,12 @@ pub fn grpc_to_http_url(raw: &str) -> AppResult<String> {
     if raw.starts_with("grpcs://") {
         Ok(raw.replacen("grpcs://", "https://", 1))
     } else if raw.starts_with("grpc://") {
-        Ok(raw.replacen("grpc://", "http://", 1))
+        let http_url = raw.replacen("grpc://", "http://", 1);
+        if http_url.ends_with(":443") || http_url.contains(":443/") {
+            Ok(http_url.replacen("http://", "https://", 1))
+        } else {
+            Ok(http_url)
+        }
     } else {
         Err(AppError::InvalidArgument(format!("not a grpc url: {raw}")))
     }

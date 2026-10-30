@@ -6,7 +6,7 @@ poll_interval_ms: 1000
 # mainnet; bump it to 8-16 for high-BPS chains (Arbitrum/Base/OP/Polygon).
 block_fetch_concurrency: 4
 database:
-  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet"
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet_core_dev"
 redis:
   url: "redis://127.0.0.1:6379"
 nats:
@@ -17,5 +17,9 @@ chain:
   evm_chain_id: 1
   confirmations: 12
   endpoints:
-    - url: "http://127.0.0.1:8545/rpc/eth/gw_5a6ce3f0795246bc9d5b938e5af8a399"
+    - url: "http://127.0.0.1:8545/rpc/eth/gw_52f5c01bf1e840c4b1c8ea9e130c690e"
+      weight: 1
+    - url: "https://ethereum-rpc.publicnode.com"
+      weight: 1
+    - url: "https://eth.llamarpc.com"
       weight: 1

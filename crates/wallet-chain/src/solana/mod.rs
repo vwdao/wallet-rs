@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rust_decimal::Decimal;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::sync::Arc;
 use wallet_config::ChainRuntimeConfig;
 use wallet_error::{AppError, AppResult};
@@ -131,6 +132,64 @@ impl TokenBalance for SolanaChain {
         } else {
             Ok(Amount::zero(6))
         }
+    }
+
+    /// Optimized: Single RPC call to fetch ALL SPL token accounts for this wallet
+    /// instead of making N sequential round-trip calls to getTokenAccountsByOwner.
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let result = self
+            .rpc(
+                "getTokenAccountsByOwner",
+                json!([
+                    wallet.as_str(),
+                    { "programId": TOKEN_PROGRAM_ID },
+                    { "encoding": "jsonParsed" }
+                ]),
+            )
+            .await;
+
+        let mut mint_balances: HashMap<String, Amount> = HashMap::new();
+        if let Ok(res) = result {
+            if let Some(accounts) = res.get("value").and_then(|v| v.as_array()) {
+                for acct in accounts {
+                    let info = acct.pointer("/account/data/parsed/info");
+                    if let Some(info) = info {
+                        let mint = info.get("mint").and_then(|m| m.as_str()).unwrap_or("");
+                        let amount = info
+                            .pointer("/tokenAmount/amount")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse::<u64>().ok())
+                            .unwrap_or(0);
+                        let decimals = info
+                            .pointer("/tokenAmount/decimals")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(6) as u32;
+                        mint_balances.insert(
+                            mint.to_string(),
+                            Amount::new(Decimal::from(amount), decimals),
+                        );
+                    }
+                }
+            }
+        }
+
+        let mut out = Vec::with_capacity(tokens.len());
+        for t in tokens {
+            let bal = mint_balances
+                .get(t.as_str())
+                .cloned()
+                .unwrap_or_else(|| Amount::zero(6));
+            out.push((t.clone(), bal));
+        }
+        Ok(out)
     }
 }
 

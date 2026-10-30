@@ -55,6 +55,22 @@ fn sanitize_json(v: serde_json::Value) -> serde_json::Value {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct TransactionFilter {
+    pub chain_index: Option<i64>,
+    pub addresses: Vec<String>,
+    pub status: Option<String>,
+    pub token_address: Option<String>,
+    pub keyword: Option<String>,
+    pub transfer_type: Option<String>,
+    pub start_time: Option<i64>,
+    pub end_time: Option<i64>,
+    pub include_spam: Option<bool>,
+    pub is_spam: Option<bool>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
 pub struct TransactionRepo<'a> {
     db: &'a Db,
 }
@@ -112,6 +128,49 @@ impl<'a> TransactionRepo<'a> {
         .exec(&mut db)
         .await
         .map_err(|e| AppError::internal(e.to_string()))?;
+
+        Ok((rows, total as i64))
+    }
+
+    pub async fn list_by_filter(&self, filter: &TransactionFilter) -> AppResult<(Vec<Tx>, i64)> {
+        let mut db = self.db.clone_inner();
+        let limit = filter.limit.max(1) as usize;
+        let offset = filter.offset.max(0) as usize;
+
+        if let Some(ci) = filter.chain_index {
+            if let Some(first_addr) = filter.addresses.first() {
+                return self
+                    .list_by_address(ChainIndex(ci), first_addr, filter.limit, filter.offset)
+                    .await;
+            }
+            let rows: Vec<Tx> = Tx::filter(Tx::fields().chain_index().eq(ci))
+                .limit(limit)
+                .offset(offset)
+                .exec(&mut db)
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))?;
+
+            let total = Tx::filter(Tx::fields().chain_index().eq(ci))
+                .count()
+                .exec(&mut db)
+                .await
+                .map_err(|e| AppError::internal(e.to_string()))?;
+
+            return Ok((rows, total as i64));
+        }
+
+        let rows: Vec<Tx> = Tx::all()
+            .limit(limit)
+            .offset(offset)
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
+
+        let total = Tx::all()
+            .count()
+            .exec(&mut db)
+            .await
+            .map_err(|e| AppError::internal(e.to_string()))?;
 
         Ok((rows, total as i64))
     }

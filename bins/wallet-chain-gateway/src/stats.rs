@@ -84,10 +84,31 @@ impl StatsWorker {
     async fn flush(&self, buffer: &mut Vec<StatsEvent>) {
         let events: Vec<StatsEvent> = buffer.drain(..).collect();
         let count = events.len();
+        if count == 0 {
+            return;
+        }
 
-        // Reuse a single connection for the whole batch instead of opening one
-        // per row.
         let mut db = self.db.clone_inner();
+
+        // 1. Batch increment total_requests on chain_gateway_keys, eliminating
+        // per-request synchronous row-level lock contention in Postgres.
+        let mut key_counts: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+        for event in &events {
+            if !event.api_key.is_empty() {
+                *key_counts.entry(event.api_key.clone()).or_insert(0) += 1;
+            }
+        }
+        for (api_key, inc) in key_counts {
+            let _ = toasty::sql::statement(
+                "UPDATE chain_gateway_keys SET total_requests = total_requests + $1 WHERE api_key = $2",
+            )
+            .bind(inc)
+            .bind(&api_key)
+            .exec(&mut db)
+            .await;
+        }
+
+        // 2. Reuse a single connection for the batch stats insertion
         for event in &events {
             let _ = toasty::create!(wallet_db::ChainGatewayStats {
                 api_key: &event.api_key,

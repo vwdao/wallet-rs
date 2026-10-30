@@ -1,6 +1,6 @@
 listen: "0.0.0.0:9000"
 database:
-  url: "postgres://wallet:wallet@127.0.0.1:5432/wallet"
+  url: "postgres://postgres:postgres@127.0.0.1:5432/wallet_core_dev"
   max_connections: 16
 redis:
   url: "redis://127.0.0.1:6379"

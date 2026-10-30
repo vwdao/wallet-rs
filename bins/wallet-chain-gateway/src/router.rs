@@ -94,6 +94,7 @@ pub struct RpcRouter {
     rate_limited_until: DashMap<String, Instant>,
     failure_threshold: u32,
     cache_ttl: Duration,
+    singleflight: Arc<DashMap<String, tokio::sync::broadcast::Sender<Result<(String, serde_json::Value), String>>>>,
 }
 
 impl RpcRouter {
@@ -106,6 +107,7 @@ impl RpcRouter {
             rate_limited_until: DashMap::new(),
             failure_threshold,
             cache_ttl: Duration::from_secs(15),
+            singleflight: Arc::new(DashMap::new()),
         }
     }
 
@@ -191,6 +193,28 @@ impl RpcRouter {
         require_ws_tunnel: bool,
         allow_archive_fallback: bool,
     ) -> AppResult<SelectedEndpoint> {
+        self.select_endpoint_with_protocol(
+            chain_index,
+            method,
+            user_tier,
+            cfg,
+            require_ws_tunnel,
+            allow_archive_fallback,
+            None,
+        )
+        .await
+    }
+
+    pub async fn select_endpoint_with_protocol(
+        &self,
+        chain_index: i64,
+        method: Option<&str>,
+        user_tier: &str,
+        cfg: &GatewayConfig,
+        require_ws_tunnel: bool,
+        allow_archive_fallback: bool,
+        required_protocol: Option<EndpointProtocol>,
+    ) -> AppResult<SelectedEndpoint> {
         let cached = self.get_chain_endpoints(chain_index).await?;
         let all_eps = &cached.endpoints;
         if all_eps.is_empty() {
@@ -206,6 +230,11 @@ impl RpcRouter {
         let filtered: Vec<&CachedEndpoint> = all_eps
             .iter()
             .filter(|ep| {
+                if let Some(req_proto) = required_protocol {
+                    if ep.protocol != Some(req_proto) {
+                        return false;
+                    }
+                }
                 if require_ws_tunnel
                     && !parse_endpoint_url_with(&ep.url, ep.protocol)
                         .map(|(p, _)| p.supports_ws_tunnel())
@@ -223,8 +252,10 @@ impl RpcRouter {
                 // ones from rotation so a fast-but-broken endpoint doesn't win
                 // weighted selection. gRPC probes are connectivity-only, so
                 // this only applies when the chain has a height-reporting peer.
-                if let (Some(_), None) = (max_height, ep.block_height) {
-                    return false;
+                if ep.protocol != Some(EndpointProtocol::Grpc) {
+                    if let (Some(_), None) = (max_height, ep.block_height) {
+                        return false;
+                    }
                 }
                 if let (Some(mh), Some(eh)) = (max_height, ep.block_height) {
                     if mh.saturating_sub(eh) > max_block_lag {
@@ -367,6 +398,63 @@ impl RpcRouter {
     ) -> AppResult<(String, serde_json::Value)> {
         let method = body.get("method").and_then(|v| v.as_str());
 
+        // Request coalescing (Singleflight) for concurrent read-only RPCs:
+        // deduplicates identical in-flight requests, preventing cache stampedes.
+        if is_singleflight_eligible(method) {
+            let params_str = body.get("params").map(|p| p.to_string()).unwrap_or_default();
+            let key = format!("{}:{}:{}", chain_index, method.unwrap_or_default(), params_str);
+
+            let (tx, mut rx, is_leader) = {
+                let entry = self.singleflight.entry(key.clone());
+                match entry {
+                    dashmap::mapref::entry::Entry::Occupied(occ) => {
+                        let rx = occ.get().subscribe();
+                        (occ.get().clone(), rx, false)
+                    }
+                    dashmap::mapref::entry::Entry::Vacant(vac) => {
+                        let (tx, rx) = tokio::sync::broadcast::channel(1);
+                        vac.insert(tx.clone());
+                        (tx, rx, true)
+                    }
+                }
+            };
+
+            if !is_leader {
+                match rx.recv().await {
+                    Ok(Ok(pair)) => return Ok(pair),
+                    Ok(Err(err_msg)) => return Err(AppError::Unavailable(err_msg)),
+                    Err(_) => {
+                        // Leader dropped, fall back to direct call
+                    }
+                }
+            } else {
+                let res = self
+                    .execute_rpc_inner(chain_index, body, user_tier, timeout, cfg)
+                    .await;
+                let to_send = res
+                    .as_ref()
+                    .map(|(u, v)| (u.clone(), v.clone()))
+                    .map_err(|e| e.to_string());
+                let _ = tx.send(to_send);
+                self.singleflight.remove(&key);
+                return res;
+            }
+        }
+
+        self.execute_rpc_inner(chain_index, body, user_tier, timeout, cfg)
+            .await
+    }
+
+    async fn execute_rpc_inner(
+        &self,
+        chain_index: i64,
+        body: &serde_json::Value,
+        user_tier: &str,
+        timeout: Duration,
+        cfg: &GatewayConfig,
+    ) -> AppResult<(String, serde_json::Value)> {
+        let method = body.get("method").and_then(|v| v.as_str());
+
         let mut last_err = None;
         for attempt in 0..cfg.max_retries.max(1) {
             let selection = match self
@@ -443,4 +531,35 @@ impl RpcRouter {
     pub fn invalidate_all(&self) {
         self.cache.clear();
     }
+}
+
+fn is_singleflight_eligible(method: Option<&str>) -> bool {
+    let Some(m) = method else {
+        return false;
+    };
+    matches!(
+        m,
+        "eth_blockNumber"
+            | "eth_chainId"
+            | "eth_gasPrice"
+            | "eth_maxPriorityFeePerGas"
+            | "eth_feeHistory"
+            | "eth_getBalance"
+            | "eth_call"
+            | "eth_getCode"
+            | "eth_getStorageAt"
+            | "eth_getTransactionReceipt"
+            | "eth_getTransactionByHash"
+            | "eth_getBlockByNumber"
+            | "eth_getBlockByHash"
+            | "getSlot"
+            | "getLatestBlockhash"
+            | "getBalance"
+            | "getAccountInfo"
+            | "getTokenAccountBalance"
+            | "getMasterchainInfo"
+            | "sui_getLatestCheckpointSequenceNumber"
+            | "getblockcount"
+            | "wallet/getnowblock"
+    )
 }

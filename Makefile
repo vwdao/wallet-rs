@@ -34,6 +34,35 @@ proto: ## Regenerate protobuf code
 	protoc --proto_path=proto --tonic_out=crates/wallet-proto/src/proto \
 		--include_imports proto/wallet/v1/*.proto
 
+# ── Local Development ────────────────────────────────────────────────────
+
+local-infra: ## Start local middleware (Postgres, Redis, NATS, ClickHouse)
+	docker compose up -d
+
+local-stop: ## Stop local middleware
+	docker compose down
+
+local-all: ## Run all core microservices locally via dev script
+	./scripts/dev.sh all
+
+run-api: ## Run wallet-api locally (gRPC :9000)
+	cargo run -p wallet-api -- --config configs/wallet-api.yaml
+
+run-app-gw: ## Run wallet-apigw-app locally (HTTP :8080)
+	cargo run -p wallet-apigw-app -- --config configs/apigw-app.yaml
+
+run-admin-gw: ## Run wallet-apigw-admin locally (HTTP :8081)
+	cargo run -p wallet-apigw-admin -- --config configs/apigw-admin.yaml
+
+run-chain-gw: ## Run wallet-chain-gateway locally (HTTP :8545, gRPC :50051)
+	cargo run -p wallet-chain-gateway -- --config configs/chain-gateway.yaml
+
+run-jobs: ## Run wallet-jobs locally
+	cargo run -p wallet-jobs -- --config configs/wallet-jobs.yaml
+
+local-status: ## Check docker containers and port listening status
+	./scripts/dev.sh status
+
 # ── Docker ───────────────────────────────────────────────────────────────
 
 push: build ## Build and push image

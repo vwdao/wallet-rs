@@ -174,7 +174,7 @@ impl SettingsReloader {
                 .unwrap_or(1_000),
             log_requests: get("log_requests")
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(false),
+                .unwrap_or(true),
         })
     }
 }

@@ -6,6 +6,9 @@ import "wallet/v1/common.proto";
 service CmsService {
   rpc GetAppConfig(GetAppConfigRequest) returns (AppConfig);
   rpc ListGuides(ListGuidesRequest) returns (ListGuidesResponse);
+  rpc CheckAppVersion(CheckAppVersionRequest) returns (CheckAppVersionResponse);
+  rpc CheckGeo(CheckGeoRequest) returns (CheckGeoResponse);
+  rpc CheckIpAccess(CheckIpAccessRequest) returns (CheckIpAccessResponse);
 }
 
 message AppConfig {
@@ -36,4 +39,41 @@ message ListGuidesRequest {
 message ListGuidesResponse {
   repeated Guide items = 1;
   PageMeta meta = 2;
+}
+
+message CheckAppVersionRequest {
+  string platform = 1;
+  string version = 2;
+  string locale = 3;
+}
+
+message CheckAppVersionResponse {
+  bool need_update = 1;
+  bool force_update = 2;
+  string latest_version = 3;
+  string min_version = 4;
+  string download_url = 5;
+  string title = 6;
+  string description = 7;
+}
+
+message CheckGeoRequest {
+  string ip = 1;
+}
+
+message CheckGeoResponse {
+  bool is_allowed = 1;
+  string country_code = 2;
+  string country_name = 3;
+  string reason = 4;
+}
+
+message CheckIpAccessRequest {
+  string ip = 1;
+}
+
+message CheckIpAccessResponse {
+  bool is_whitelisted = 1;
+  bool is_blocked = 2;
+  string reason = 3;
 }

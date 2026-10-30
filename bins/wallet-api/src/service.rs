@@ -127,6 +127,128 @@ impl TokenService for TokenSvc {
             .collect();
         Ok(Response::new(GetBalancesResponse { items }))
     }
+
+    async fn check_recipient(
+        &self,
+        req: Request<CheckRecipientRequest>,
+    ) -> Result<Response<CheckRecipientResponse>, Status> {
+        let r = req.into_inner();
+        let domain_req = wallet_domain::token::RecipientCheckRequest {
+            chain_index: r.chain_index,
+            address: r.address,
+            sender_address: r.sender_address,
+            current_token_contract: r.current_token_contract,
+            reference_addresses: r.reference_addresses,
+            trusted_recipient: r.trusted_recipient,
+        };
+        let res = wallet_domain::token::TokenService::new(&self.0)
+            .check_recipient(&domain_req)
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(CheckRecipientResponse {
+            action: res.action,
+            reason: res.reason,
+            complete: res.complete,
+            rules_version: res.rules_version,
+            valid_until_ms: res.valid_until_ms,
+            items: res
+                .items
+                .into_iter()
+                .map(|item| RecipientCheckItem {
+                    kind: item.kind,
+                    outcome: item.outcome,
+                    action: item.action,
+                    source: item.source,
+                    checked_at_ms: item.checked_at_ms,
+                    expires_at_ms: item.expires_at_ms,
+                })
+                .collect(),
+            similarity_prefix: res.similarity_prefix,
+            similarity_suffix: res.similarity_suffix,
+            black_hole_addresses: res.black_hole_addresses,
+        }))
+    }
+
+    async fn list_token_balance(
+        &self,
+        req: Request<ListTokenBalanceRequest>,
+    ) -> Result<Response<ListTokenBalanceResponse>, Status> {
+        let r = req.into_inner();
+        let domain_reqs: Vec<_> = r
+            .addresses
+            .into_iter()
+            .map(|a| wallet_domain::token::WalletAddressChains {
+                address: a.address,
+                chain_indexes: a.chain_indexes,
+            })
+            .collect();
+
+        let groups = wallet_domain::token::TokenService::new(&self.0)
+            .list_token_balances_batch(&domain_reqs)
+            .await?;
+
+        let list = groups
+            .into_iter()
+            .map(|g| WalletBalanceEntry {
+                address: g.address,
+                balances: g
+                    .balances
+                    .into_iter()
+                    .map(|b| TokenBalanceDetail {
+                        chain_index: b.chain_index,
+                        address: b.address,
+                        name: b.name,
+                        symbol: b.symbol,
+                        decimals: b.decimals,
+                        raw_balance: b.raw_balance,
+                        price: b.price,
+                        logo_url: b.logo_url,
+                        is_official: b.is_official,
+                    })
+                    .collect(),
+            })
+            .collect();
+
+        Ok(Response::new(ListTokenBalanceResponse { list }))
+    }
+
+    async fn query_tx_latest_token(
+        &self,
+        req: Request<QueryTxLatestTokenRequest>,
+    ) -> Result<Response<QueryTxLatestTokenResponse>, Status> {
+        let r = req.into_inner();
+        let queries: Vec<_> = r
+            .chains
+            .into_iter()
+            .map(|c| wallet_domain::token::TxLatestTokenQuery {
+                address: c.address,
+                chain_index: c.chain_index,
+            })
+            .collect();
+
+        let items = wallet_domain::token::TokenService::new(&self.0)
+            .query_tx_latest_tokens(&queries, r.start_time, r.end_time, &r.time_aggregation)
+            .await?;
+
+        let list = items
+            .into_iter()
+            .map(|t| TokenWithWallet {
+                wallet_address: t.wallet_address,
+                chain_index: t.chain_index,
+                name: t.name,
+                symbol: t.symbol,
+                decimals: t.decimals,
+                logo_url: t.logo_url,
+                address: t.address,
+                chain_id: t.chain_id,
+                last_tx_timestamp: t.last_tx_timestamp,
+                period_start: t.period_start,
+                is_official: t.is_official,
+            })
+            .collect();
+
+        Ok(Response::new(QueryTxLatestTokenResponse { list }))
+    }
 }
 
 #[tonic::async_trait]
@@ -208,6 +330,151 @@ impl TransactionService for TxSvc {
                 .max_priority_fee_per_gas
                 .map(|v| v.to_string())
                 .unwrap_or_default(),
+        }))
+    }
+
+    async fn transactions_by_filter(
+        &self,
+        req: Request<TransactionsByFilterRequest>,
+    ) -> Result<Response<TransactionsByFilterResponse>, Status> {
+        let r = req.into_inner();
+        let addrs: Vec<String> = r
+            .addresses
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let opts = wallet_domain::transaction::TransactionFilterOptions {
+            chain_index: r.chain_index,
+            addresses: addrs,
+            status: r.status,
+            token_address: r.token_address,
+            keyword: r.keyword,
+            transfer_type: r.transfer_type,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            include_spam: r.include_spam,
+            is_spam: r.is_spam,
+            page: r.page.max(1) as u32,
+            page_size: r.limit.clamp(1, 100) as u32,
+        };
+
+        let (items, count) = wallet_domain::transaction::TransactionService::new(&self.0)
+            .list_by_filter(&opts)
+            .await?;
+
+        Ok(Response::new(TransactionsByFilterResponse {
+            count,
+            list: items.into_iter().map(tx_from_row).collect(),
+        }))
+    }
+
+    async fn transactions_from_summary(
+        &self,
+        req: Request<TransactionsByFilterRequest>,
+    ) -> Result<Response<TransactionsSummaryResponse>, Status> {
+        let r = req.into_inner();
+        let addrs: Vec<String> = r
+            .addresses
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+
+        let opts = wallet_domain::transaction::TransactionFilterOptions {
+            chain_index: r.chain_index,
+            addresses: addrs,
+            status: r.status,
+            token_address: r.token_address,
+            keyword: r.keyword,
+            transfer_type: r.transfer_type,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            include_spam: r.include_spam,
+            is_spam: r.is_spam,
+            page: r.page.max(1) as u32,
+            page_size: r.limit.clamp(1, 100) as u32,
+        };
+
+        let (items, count) = wallet_domain::transaction::TransactionService::new(&self.0)
+            .list_summary(&opts)
+            .await?;
+
+        Ok(Response::new(TransactionsSummaryResponse {
+            count,
+            list: items
+                .into_iter()
+                .map(|s| TransactionSummary {
+                    txn: s.txn,
+                    chain_index: s.chain_index,
+                    chain_name: s.chain_name,
+                    from_address: s.from_address,
+                    to_address: s.to_address,
+                    value: s.value,
+                    fee: s.fee,
+                    tx_type: s.tx_type,
+                    token_address: s.token_address,
+                    timestamp: s.timestamp,
+                    status: s.status,
+                    block_number: s.block_number,
+                    token_decimal: s.token_decimal,
+                    token_symbol: s.token_symbol,
+                    token_logo_url: s.token_logo_url,
+                    token_name: s.token_name,
+                    risk_level: s.risk_level,
+                    is_spam: s.is_spam,
+                    price: s.price,
+                    native_price: s.native_price,
+                })
+                .collect(),
+        }))
+    }
+
+    async fn get_transaction_detail(
+        &self,
+        req: Request<GetTransactionDetailRequest>,
+    ) -> Result<Response<TransactionDetail>, Status> {
+        let r = req.into_inner();
+        let d = wallet_domain::transaction::TransactionService::new(&self.0)
+            .get_detail(ChainIndex(r.chain_index), &r.txn)
+            .await?;
+
+        Ok(Response::new(TransactionDetail {
+            txn: d.txn,
+            from_address: d.from_address,
+            to_address: d.to_address,
+            value: d.value,
+            fee: d.fee,
+            tx_type: d.tx_type,
+            token_address: d.token_address,
+            timestamp: d.timestamp,
+            status: d.status,
+            block_number: d.block_number,
+            chain_index: d.chain_index,
+            use_gaspool: d.use_gaspool,
+            gaspool: d.gaspool_detail.map(|g| TxRefGasPool {
+                gas: g.gas,
+                gas_usdt: g.gas_usdt,
+                native_tx_hash: g.native_tx_hash,
+                native_tx_value: g.native_tx_value,
+                native_tx_value_usdt: g.native_tx_value_usdt,
+                native_tx_gas: g.native_tx_gas,
+                native_tx_gas_usdt: g.native_tx_gas_usdt,
+                status: g.status,
+                price: g.price,
+                activate_fee: g.activate_fee,
+                activate_fee_usdt: g.activate_fee_usdt,
+                energy: g.energy,
+                energy_trx: g.energy_trx,
+                energy_usdt: g.energy_usdt,
+                bandwidth: g.bandwidth,
+                bandwidth_trx: g.bandwidth_trx,
+                bandwidth_usdt: g.bandwidth_usdt,
+                bandwidth_price: g.bandwidth_price,
+            }),
+            price: d.price,
+            native_price: d.native_price,
         }))
     }
 }
@@ -388,6 +655,59 @@ impl DappService for DappSvc {
             .await?;
         Ok(Response::new(dapp_from_row(d)))
     }
+
+    async fn list_approval_by_user_address(
+        &self,
+        req: Request<ListApprovalByUserAddressRequest>,
+    ) -> Result<Response<ListApprovalByUserAddressResponse>, Status> {
+        let r = req.into_inner();
+        let (page, page_size) = page_of(r.pagination.as_ref());
+        let (items, total) = wallet_domain::dapp::DappService::new(&self.0)
+            .list_approvals_by_user_address(r.chain_index, &r.address, page, page_size)
+            .await?;
+
+        Ok(Response::new(ListApprovalByUserAddressResponse {
+            items: items
+                .into_iter()
+                .map(|a| TokenApprovalItem {
+                    chain_index: a.chain_index,
+                    dapp_name: a.dapp_name,
+                    dapp_url: a.dapp_url,
+                    spender_address: a.spender_address,
+                    token_address: a.token_address,
+                    token_symbol: a.token_symbol,
+                    allowance: a.allowance,
+                    is_unlimited: a.is_unlimited,
+                    updated_at: a.updated_at,
+                })
+                .collect(),
+            meta: Some(PageMeta {
+                page,
+                page_size,
+                total: total as u64,
+            }),
+        }))
+    }
+
+    async fn search_dapp(
+        &self,
+        req: Request<SearchDappRequest>,
+    ) -> Result<Response<ListDappsResponse>, Status> {
+        let r = req.into_inner();
+        let (page, page_size) = page_of(r.pagination.as_ref());
+        let (items, total) = wallet_domain::dapp::DappService::new(&self.0)
+            .search(&r.query, r.chain_index, page, page_size)
+            .await?;
+
+        Ok(Response::new(ListDappsResponse {
+            items: items.into_iter().map(dapp_from_row).collect(),
+            meta: Some(PageMeta {
+                page,
+                page_size,
+                total: total as u64,
+            }),
+        }))
+    }
 }
 
 #[tonic::async_trait]
@@ -510,6 +830,59 @@ impl CmsService for CmsSvc {
             }),
         }))
     }
+
+    async fn check_app_version(
+        &self,
+        req: Request<CheckAppVersionRequest>,
+    ) -> Result<Response<CheckAppVersionResponse>, Status> {
+        let r = req.into_inner();
+        let res = wallet_domain::cms::CmsService::new(&self.0)
+            .check_app_version(&r.platform, &r.version, &r.locale)
+            .await?;
+
+        Ok(Response::new(CheckAppVersionResponse {
+            need_update: res.need_update,
+            force_update: res.force_update,
+            latest_version: res.latest_version,
+            min_version: res.min_version,
+            download_url: res.download_url,
+            title: res.title,
+            description: res.description,
+        }))
+    }
+
+    async fn check_geo(
+        &self,
+        req: Request<CheckGeoRequest>,
+    ) -> Result<Response<CheckGeoResponse>, Status> {
+        let r = req.into_inner();
+        let res = wallet_domain::cms::CmsService::new(&self.0)
+            .check_geo(&r.ip)
+            .await?;
+
+        Ok(Response::new(CheckGeoResponse {
+            is_allowed: res.is_allowed,
+            country_code: res.country_code,
+            country_name: res.country_name,
+            reason: res.reason,
+        }))
+    }
+
+    async fn check_ip_access(
+        &self,
+        req: Request<CheckIpAccessRequest>,
+    ) -> Result<Response<CheckIpAccessResponse>, Status> {
+        let r = req.into_inner();
+        let res = wallet_domain::cms::CmsService::new(&self.0)
+            .check_ip_access(&r.ip)
+            .await?;
+
+        Ok(Response::new(CheckIpAccessResponse {
+            is_whitelisted: res.is_whitelisted,
+            is_blocked: res.is_blocked,
+            reason: res.reason,
+        }))
+    }
 }
 
 pub fn page_of(p: Option<&Pagination>) -> (u32, u32) {
@@ -543,10 +916,11 @@ pub fn tx_from_row(t: wallet_db::TxRow) -> Transaction {
         status: t.status,
         contract_address: t.contract_address.unwrap_or_default(),
         method: t.method.unwrap_or_default(),
-        // Input/spend records use negative `log_index` (UTXO chains); they are
-        // internal record discriminators and are not surfaced to API clients.
         log_index: t.log_index.filter(|&i| i >= 0).map(|i| i as u64).unwrap_or_default(),
         gas_fee: t.gas_fee.map(|g| g.to_string()).unwrap_or_default(),
+        timestamp: 0,
+        price: "0".to_string(),
+        native_price: "0".to_string(),
     }
 }
 

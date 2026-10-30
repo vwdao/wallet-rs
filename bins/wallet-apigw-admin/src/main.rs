@@ -64,8 +64,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let cfg: GatewayConfig = load_yaml(&args.config)?;
     let channel = tonic::transport::Endpoint::from_shared(cfg.grpc_endpoint.clone())?
-        .connect()
-        .await?;
+        .tcp_keepalive(Some(std::time::Duration::from_secs(60)))
+        .http2_keep_alive_interval(std::time::Duration::from_secs(30))
+        .keep_alive_timeout(std::time::Duration::from_secs(10))
+        .keep_alive_while_idle(true)
+        .connect_timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(30))
+        .connect_lazy();
     let state = Arc::new(AdminState {
         cfg: cfg.clone(),
         networks: wallet_proto::wallet::v1::admin::admin_network_service_client::AdminNetworkServiceClient::new(

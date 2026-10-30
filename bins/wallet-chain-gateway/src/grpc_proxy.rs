@@ -215,19 +215,20 @@ async fn proxy_call(req: http::Request<Incoming>, state: &Gw, client_ip: String)
         return ProxyOutcome::err(16, "chain not allowed for api key", &method);
     }
 
-    let next_total_requests = key_row.total_requests.saturating_add(1);
-    {
-        let mut db = state.db.clone_inner();
-        let _ = key_row
-            .update()
-            .total_requests(next_total_requests)
-            .exec(&mut db)
-            .await;
-    }
+    // total_requests is asynchronously aggregated and flushed in batches
+    // by state.stats (StatsCollector), eliminating row locks and DB write overhead.
 
     let selection = match state
         .router
-        .select_endpoint(chain_index, None, &key_row.allowed_tier, &cfg, false, false)
+        .select_endpoint_with_protocol(
+            chain_index,
+            None,
+            &key_row.allowed_tier,
+            &cfg,
+            false,
+            false,
+            Some(crate::protocol::EndpointProtocol::Grpc),
+        )
         .await
     {
         Ok(s) => s,

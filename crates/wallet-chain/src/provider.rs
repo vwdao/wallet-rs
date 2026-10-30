@@ -63,16 +63,27 @@ impl RpcPool {
             .iter()
             .map(|_| CircuitBreaker::new(3, Duration::from_secs(30)))
             .collect();
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(32)
+            .tcp_keepalive(Duration::from_secs(60))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
         Ok(Self {
             endpoints,
             cursor: AtomicUsize::new(0),
             breakers,
-            client: reqwest::Client::new(),
+            client,
         })
     }
 
     pub fn client(&self) -> &reqwest::Client {
         &self.client
+    }
+
+    pub fn len(&self) -> usize {
+        self.endpoints.len()
     }
 
     pub fn next_url(&self) -> AppResult<&str> {
