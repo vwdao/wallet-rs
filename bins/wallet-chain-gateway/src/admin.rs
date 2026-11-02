@@ -335,6 +335,8 @@ async fn update_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
 
+        crate::proxy::invalidate_key_cache(&row.api_key);
+
         Ok(Json(KeyResponse::from_row(&row)))
     }
     .await;
@@ -360,7 +362,7 @@ async fn delete_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .map_err(|_| AppError::InvalidArgument("invalid uuid".into()))?;
 
         let mut db = st.db.clone_inner();
-        ChainGatewayKey::get_by_id(&mut db, &id)
+        let row = ChainGatewayKey::get_by_id(&mut db, &id)
             .await
             .map_err(|_| AppError::NotFound("key not found".into()))?;
 
@@ -369,6 +371,8 @@ async fn delete_key(req: &mut Request, depot: &mut Depot, res: &mut Response) {
             .exec(&mut db)
             .await
             .map_err(|e| AppError::internal(e.to_string()))?;
+
+        crate::proxy::invalidate_key_cache(&row.api_key);
 
         Ok(())
     }

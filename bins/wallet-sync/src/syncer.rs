@@ -68,9 +68,10 @@ pub async fn run(rt: SyncRuntime) -> AppResult<()> {
     // Consecutive ticks where the RPC did not serve a usable tip. Drives
     // both log throttling and poll backoff.
     let mut consecutive_failures = 0u64;
+    let mut setting_cache: Option<(Option<wallet_db::SyncSetting>, std::time::Instant)> = None;
     loop {
         let consecutive = consecutive_failures;
-        let outcome = match tick(&rt, consecutive).await {
+        let outcome = match tick(&rt, consecutive, &mut setting_cache).await {
             Ok(o) => o,
             Err(e) => {
                 if consecutive == 0 {
@@ -108,8 +109,18 @@ pub async fn run(rt: SyncRuntime) -> AppResult<()> {
 async fn tick(
     rt: &SyncRuntime,
     consecutive_failures: u64,
+    cache: &mut Option<(Option<wallet_db::SyncSetting>, std::time::Instant)>,
 ) -> AppResult<TickOutcome> {
-    let setting = SyncSettingRepo::new(&rt.db).get(rt.chain_index).await?;
+    let setting = match cache {
+        Some((cached_val, fetched_at)) if fetched_at.elapsed() < Duration::from_secs(15) => {
+            cached_val.clone()
+        }
+        _ => {
+            let fetched = SyncSettingRepo::new(&rt.db).get(rt.chain_index).await?;
+            *cache = Some((fetched.clone(), std::time::Instant::now()));
+            fetched
+        }
+    };
     let poll_ms = setting
         .as_ref()
         .map(|s| s.poll_interval_ms as u64)

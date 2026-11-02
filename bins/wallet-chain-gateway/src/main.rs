@@ -292,6 +292,11 @@ fn build_http_client() -> reqwest::Client {
         // RPC calls must reach endpoints directly; honoring HTTP_PROXY here
         // can stall requests for rpc_timeout_secs * max_retries.
         .no_proxy()
+        .pool_idle_timeout(Duration::from_secs(90))
+        .pool_max_idle_per_host(128)
+        .tcp_keepalive(Duration::from_secs(60))
+        .tcp_nodelay(true)
+        .connect_timeout(Duration::from_secs(8))
         .build()
         .expect("failed to build HTTP client")
 }

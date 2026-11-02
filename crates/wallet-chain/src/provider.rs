@@ -4,10 +4,15 @@ use std::time::{Duration, Instant};
 use wallet_config::RpcEndpoint;
 use wallet_error::{AppError, AppResult};
 
+#[derive(Debug, Default)]
+struct CircuitState {
+    failures: u32,
+    open_until: Option<Instant>,
+}
+
 #[derive(Debug)]
 pub struct CircuitBreaker {
-    failures: Mutex<u32>,
-    open_until: Mutex<Option<Instant>>,
+    state: Mutex<CircuitState>,
     threshold: u32,
     cool_down: Duration,
 }
@@ -15,16 +20,15 @@ pub struct CircuitBreaker {
 impl CircuitBreaker {
     pub fn new(threshold: u32, cool_down: Duration) -> Self {
         Self {
-            failures: Mutex::new(0),
-            open_until: Mutex::new(None),
+            state: Mutex::new(CircuitState::default()),
             threshold,
             cool_down,
         }
     }
 
     pub fn allow(&self) -> bool {
-        let open = self.open_until.lock();
-        if let Some(until) = *open {
+        let state = self.state.lock();
+        if let Some(until) = state.open_until {
             if Instant::now() < until {
                 return false;
             }
@@ -33,15 +37,16 @@ impl CircuitBreaker {
     }
 
     pub fn on_success(&self) {
-        *self.failures.lock() = 0;
-        *self.open_until.lock() = None;
+        let mut state = self.state.lock();
+        state.failures = 0;
+        state.open_until = None;
     }
 
     pub fn on_failure(&self) {
-        let mut failures = self.failures.lock();
-        *failures += 1;
-        if *failures >= self.threshold {
-            *self.open_until.lock() = Some(Instant::now() + self.cool_down);
+        let mut state = self.state.lock();
+        state.failures = state.failures.saturating_add(1);
+        if state.failures >= self.threshold {
+            state.open_until = Some(Instant::now() + self.cool_down);
         }
     }
 }
@@ -68,6 +73,7 @@ impl RpcPool {
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(32)
             .tcp_keepalive(Duration::from_secs(60))
+            .tcp_nodelay(true)
             .timeout(Duration::from_secs(20))
             .connect_timeout(Duration::from_secs(8))
             .build()

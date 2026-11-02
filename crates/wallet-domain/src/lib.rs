@@ -11,6 +11,7 @@ pub mod transaction;
 pub mod user;
 
 use std::sync::Arc;
+use std::time::Duration;
 use wallet_chain::ChainRegistry;
 use wallet_db::{clickhouse::ClickHouseDb, Db};
 use wallet_events::EventBus;
@@ -34,13 +35,28 @@ impl AppState {
         events: Arc<dyn EventBus>,
         clickhouse: Option<ClickHouseDb>,
     ) -> Self {
+        let http = reqwest::Client::builder()
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(32)
+            .tcp_keepalive(Duration::from_secs(60))
+            .tcp_nodelay(true)
+            .connect_timeout(Duration::from_secs(8))
+            .timeout(Duration::from_secs(25))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
         Self {
             db,
             chains: Arc::new(chains),
             events,
             clickhouse,
-            http: reqwest::Client::new(),
+            http,
             metrics: Metrics::new(),
         }
+    }
+
+    pub fn with_http_client(mut self, http: reqwest::Client) -> Self {
+        self.http = http;
+        self
     }
 }

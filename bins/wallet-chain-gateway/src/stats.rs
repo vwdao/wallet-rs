@@ -108,22 +108,56 @@ impl StatsWorker {
             .await;
         }
 
-        // 2. Reuse a single connection for the batch stats insertion
-        for event in &events {
-            let _ = toasty::create!(wallet_db::ChainGatewayStats {
-                api_key: &event.api_key,
-                chain_index: event.chain_index,
-                client_ip: event.client_ip.clone(),
-                protocol: event.protocol.clone(),
-                method: event.method.clone(),
-                status_code: event.status_code,
-                latency_ms: event.latency_ms,
-                error_msg: event.error_msg.clone(),
-            })
-            .exec(&mut db)
-            .await;
+        // 2. Multi-row batch insertion: converts up to 200 sequential DB round trips into 1-2 statements
+        for chunk in events.chunks(100) {
+            let cols_per_row = 9;
+            let mut placeholders = String::with_capacity(chunk.len() * 28);
+            for i in 0..chunk.len() {
+                if i > 0 {
+                    placeholders.push(',');
+                }
+                let base = i * cols_per_row + 1;
+                placeholders.push_str(&format!(
+                    "(${},${},${},${},${},${},${},${},${})",
+                    base, base + 1, base + 2, base + 3, base + 4, base + 5, base + 6, base + 7, base + 8
+                ));
+            }
+            let sql = format!(
+                "INSERT INTO chain_gateway_stats (id, api_key, chain_index, client_ip, protocol, method, status_code, latency_ms, error_msg) \
+                 VALUES {placeholders}"
+            );
+            let mut stmt = toasty::sql::statement(&sql);
+            for event in chunk {
+                stmt = stmt
+                    .bind(uuid::Uuid::new_v4())
+                    .bind(&event.api_key)
+                    .bind(event.chain_index)
+                    .bind_opt_text(event.client_ip.as_deref())
+                    .bind_opt_text(event.protocol.as_deref())
+                    .bind_opt_text(event.method.as_deref())
+                    .bind(event.status_code)
+                    .bind(event.latency_ms)
+                    .bind_opt_text(event.error_msg.as_deref());
+            }
+            if let Err(e) = stmt.exec(&mut db).await {
+                tracing::warn!(error = %e, "batch stats insert failed");
+            }
         }
 
         tracing::debug!("flushed {count} stats events");
+    }
+}
+
+trait BindOptText {
+    fn bind_opt_text(self, value: Option<&str>) -> Self;
+}
+
+impl BindOptText for toasty::sql::Statement {
+    fn bind_opt_text(mut self, value: Option<&str>) -> Self {
+        self = match value {
+            Some(s) => self.bind(s),
+            None => self.bind_typed(toasty::stmt::Value::Null, toasty::schema::db::Type::Text),
+        };
+        self
     }
 }

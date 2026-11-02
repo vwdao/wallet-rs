@@ -56,8 +56,17 @@ impl Rpc {
         call_delay_ms: u64,
         max_retries: u32,
     ) -> Self {
+        let http = Client::builder()
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(32)
+            .tcp_keepalive(Duration::from_secs(60))
+            .tcp_nodelay(true)
+            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(8))
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
-            http: Client::new(),
+            http,
             url,
             commitment,
             skip_preflight,

@@ -190,8 +190,7 @@ async fn proxy_call(req: http::Request<Incoming>, state: &Gw, client_ip: String)
         }
     }
 
-    let mut db = state.db.clone_inner();
-    let mut key_row = match ChainGatewayKey::filter_by_api_key(&api_key).get(&mut db).await {
+    let key_row = match crate::proxy::get_api_key_cached(&state.db, &api_key).await {
         Ok(r) => r,
         Err(_) => return ProxyOutcome::err(16, "invalid api key", &method),
     };

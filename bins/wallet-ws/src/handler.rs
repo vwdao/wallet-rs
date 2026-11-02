@@ -52,9 +52,17 @@ async fn handle(ws: WebSocket, hub: Arc<Hub>) {
                     }
                 }
                 msg = topic_rx.recv() => {
-                    if let Ok(payload) = msg {
-                        if sender.send(Message::text(payload.to_string())).await.is_err() {
-                            break;
+                    match msg {
+                        Ok(payload) => {
+                            if sender.send(Message::text(payload.to_string())).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            tracing::warn!("websocket subscriber lagged by {n} messages");
+                        }
+                        Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                         }
                     }
                 }

@@ -114,7 +114,12 @@ impl SwapProvider for OneInchProvider {
             .and_then(|a| a.as_str())
             .unwrap_or("0")
             .to_string();
-        let price_impact = compute_price_impact(amount, &amount_out);
+        let price_impact = v
+            .get("priceImpact")
+            .or_else(|| v.get("estimatedPriceImpact"))
+            .and_then(|p| p.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| compute_price_impact(amount, &amount_out));
         Ok(SwapQuote {
             provider: self.name().into(),
             amount_out,
@@ -267,7 +272,11 @@ impl SwapProvider for OkxProvider {
             .and_then(|a| a.as_str())
             .unwrap_or("0")
             .to_string();
-        let price_impact = compute_price_impact(amount, &amount_out);
+        let price_impact = v
+            .pointer("/data/[0]/priceImpact")
+            .and_then(|p| p.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| compute_price_impact(amount, &amount_out));
         Ok(SwapQuote {
             provider: self.name().into(),
             amount_out,
@@ -402,7 +411,11 @@ impl SwapProvider for MetaPathProvider {
             .and_then(|a| a.as_str())
             .unwrap_or("0")
             .to_string();
-        let price_impact = compute_price_impact(amount, &amount_out);
+        let price_impact = v
+            .get("priceImpact")
+            .and_then(|p| p.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| compute_price_impact(amount, &amount_out));
         Ok(SwapQuote {
             provider: self.name().into(),
             amount_out,

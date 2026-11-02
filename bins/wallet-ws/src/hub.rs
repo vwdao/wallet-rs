@@ -9,6 +9,9 @@ pub struct Hub {
 
 impl Hub {
     pub fn subscribe(&self, topic: &str) -> broadcast::Receiver<Value> {
+        if let Some(tx) = self.topics.get(topic) {
+            return tx.subscribe();
+        }
         self.topics
             .entry(topic.to_string())
             .or_insert_with(|| broadcast::channel(256).0)

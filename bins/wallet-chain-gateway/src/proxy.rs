@@ -24,11 +24,7 @@ pub async fn authenticate(req: &Request, st: &Gw) -> Result<ProxyAuth, AppError>
         check_rate(&st.rate, "_global", cfg.global_rate_limit_per_min)?;
     }
 
-    let mut db = st.db.clone_inner();
-    let key_row = ChainGatewayKey::filter_by_api_key(&api_key)
-        .get(&mut db)
-        .await
-        .map_err(|_| AppError::Forbidden)?;
+    let key_row = get_api_key_cached(&st.db, &api_key).await?;
 
     if !key_row.enabled {
         return Err(AppError::Forbidden);
@@ -72,23 +68,85 @@ pub fn extract_api_key(req: &Request) -> Result<String, AppError> {
         .ok_or(AppError::Unauthorized)
 }
 
+use std::collections::HashMap;
+use std::time::Duration;
+use parking_lot::RwLock;
+
+static KEY_CACHE: RwLock<Option<HashMap<String, (Instant, ChainGatewayKey)>>> = RwLock::new(None);
+const KEY_CACHE_TTL: Duration = Duration::from_secs(15);
+
+pub async fn get_api_key_cached(db: &Db, api_key: &str) -> Result<ChainGatewayKey, AppError> {
+    {
+        let cache = KEY_CACHE.read();
+        if let Some(map) = cache.as_ref() {
+            if let Some((cached_at, key_row)) = map.get(api_key) {
+                if cached_at.elapsed() < KEY_CACHE_TTL {
+                    return Ok(key_row.clone());
+                }
+            }
+        }
+    }
+
+    let mut inner = db.clone_inner();
+    let key_row = ChainGatewayKey::filter_by_api_key(api_key)
+        .get(&mut inner)
+        .await
+        .map_err(|_| AppError::Forbidden)?;
+
+    {
+        let mut cache = KEY_CACHE.write();
+        let map = cache.get_or_insert_with(HashMap::new);
+        map.insert(api_key.to_string(), (Instant::now(), key_row.clone()));
+        if map.len() > 2000 {
+            let now = Instant::now();
+            map.retain(|_, (t, _)| now.duration_since(*t) < KEY_CACHE_TTL * 2);
+        }
+    }
+
+    Ok(key_row)
+}
+
+pub fn invalidate_key_cache(api_key: &str) {
+    let mut cache = KEY_CACHE.write();
+    if let Some(map) = cache.as_mut() {
+        map.remove(api_key);
+    }
+}
+
+static NETWORK_CACHE: RwLock<Option<(Instant, HashMap<String, i64>)>> = RwLock::new(None);
+const NETWORK_CACHE_TTL: Duration = Duration::from_secs(30);
+
 pub async fn resolve_chain_index(db: &Db, chain: &str) -> Result<i64, AppError> {
+    let lower_chain = chain.to_ascii_lowercase();
+    {
+        let cache = NETWORK_CACHE.read();
+        if let Some((cached_at, map)) = cache.as_ref() {
+            if cached_at.elapsed() < NETWORK_CACHE_TTL {
+                if let Some(&index) = map.get(&lower_chain) {
+                    return Ok(index);
+                }
+            }
+        }
+    }
+
     let mut db = db.clone_inner();
     let networks: Vec<Network> = Network::filter(Network::fields().enabled().eq(true))
         .exec(&mut db)
         .await
         .map_err(|e| AppError::internal(e.to_string()))?;
 
-    networks
-        .into_iter()
-        .find(|n| {
-            n.name.eq_ignore_ascii_case(chain)
-                || wallet_types::ChainIndex(n.chain_index)
-                    .short_name()
-                    .is_some_and(|slug| slug.eq_ignore_ascii_case(chain))
-        })
-        .map(|n| n.chain_index)
-        .ok_or_else(|| AppError::InvalidArgument(format!("unknown chain: {chain}")))
+    let mut map = HashMap::with_capacity(networks.len() * 2);
+    for n in &networks {
+        map.insert(n.name.to_ascii_lowercase(), n.chain_index);
+        if let Some(slug) = wallet_types::ChainIndex(n.chain_index).short_name() {
+            map.insert(slug.to_ascii_lowercase(), n.chain_index);
+        }
+    }
+
+    let found = map.get(&lower_chain).copied();
+    *NETWORK_CACHE.write() = Some((Instant::now(), map));
+
+    found.ok_or_else(|| AppError::InvalidArgument(format!("unknown chain: {chain}")))
 }
 
 pub fn check_rate(

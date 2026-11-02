@@ -94,7 +94,12 @@ pub struct RpcRouter {
     rate_limited_until: DashMap<String, Instant>,
     failure_threshold: u32,
     cache_ttl: Duration,
-    singleflight: Arc<DashMap<String, tokio::sync::broadcast::Sender<Result<(String, serde_json::Value), String>>>>,
+    singleflight: Arc<
+        DashMap<
+            String,
+            tokio::sync::watch::Receiver<Option<Result<(String, serde_json::Value), String>>>,
+        >,
+    >,
 }
 
 impl RpcRouter {
@@ -404,28 +409,31 @@ impl RpcRouter {
             let params_str = body.get("params").map(|p| p.to_string()).unwrap_or_default();
             let key = format!("{}:{}:{}", chain_index, method.unwrap_or_default(), params_str);
 
-            let (tx, mut rx, is_leader) = {
+            let (mut rx, is_leader, tx) = {
                 let entry = self.singleflight.entry(key.clone());
                 match entry {
                     dashmap::mapref::entry::Entry::Occupied(occ) => {
-                        let rx = occ.get().subscribe();
-                        (occ.get().clone(), rx, false)
+                        (occ.get().clone(), false, None)
                     }
                     dashmap::mapref::entry::Entry::Vacant(vac) => {
-                        let (tx, rx) = tokio::sync::broadcast::channel(1);
-                        vac.insert(tx.clone());
-                        (tx, rx, true)
+                        let (tx, rx) = tokio::sync::watch::channel(None);
+                        vac.insert(rx.clone());
+                        (rx, true, Some(tx))
                     }
                 }
             };
 
             if !is_leader {
-                match rx.recv().await {
-                    Ok(Ok(pair)) => return Ok(pair),
-                    Ok(Err(err_msg)) => return Err(AppError::Unavailable(err_msg)),
-                    Err(_) => {
-                        // Leader dropped, fall back to direct call
+                loop {
+                    if rx.borrow().is_some() {
+                        break;
                     }
+                    if rx.changed().await.is_err() {
+                        break;
+                    }
+                }
+                if let Some(res) = rx.borrow().clone() {
+                    return res.map_err(AppError::Unavailable);
                 }
             } else {
                 let res = self
@@ -435,7 +443,9 @@ impl RpcRouter {
                     .as_ref()
                     .map(|(u, v)| (u.clone(), v.clone()))
                     .map_err(|e| e.to_string());
-                let _ = tx.send(to_send);
+                if let Some(tx) = tx {
+                    let _ = tx.send(Some(to_send));
+                }
                 self.singleflight.remove(&key);
                 return res;
             }

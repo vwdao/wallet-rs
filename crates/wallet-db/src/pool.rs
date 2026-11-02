@@ -118,9 +118,37 @@ async fn run_sql_migrations(database_url: &str) -> AppResult<()> {
 }
 
 fn migration_files() -> AppResult<Vec<PathBuf>> {
-    let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../migrations");
-    let mut files = Vec::new();
+    let mut candidate_dirs = Vec::new();
 
+    // 1. Explicit override via environment variable
+    if let Ok(dir) = std::env::var("MIGRATIONS_DIR") {
+        candidate_dirs.push(PathBuf::from(dir));
+    }
+
+    // 2. Current working directory (standard in containerized runtime, e.g. /app/migrations)
+    candidate_dirs.push(PathBuf::from("migrations"));
+
+    // 3. Executable-relative path (e.g. /usr/local/bin/migrations or ./target/release/migrations)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            candidate_dirs.push(parent.join("migrations"));
+            candidate_dirs.push(parent.join("../migrations"));
+        }
+    }
+
+    // 4. Fallback to compile-time source directory (for cargo test and local dev)
+    candidate_dirs.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../migrations"));
+
+    let migrations_dir = candidate_dirs
+        .into_iter()
+        .find(|d| d.is_dir())
+        .ok_or_else(|| {
+            AppError::internal(
+                "cannot locate migrations directory (checked MIGRATIONS_DIR, ./migrations, exe-relative, and build-time path)",
+            )
+        })?;
+
+    let mut files = Vec::new();
     for entry in fs::read_dir(&migrations_dir).map_err(|e| {
         AppError::internal(format!(
             "read migrations dir {}: {e}",
