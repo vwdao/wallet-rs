@@ -127,12 +127,66 @@ impl TokenBalance for SuiChain {
         let raw = result
             .get("totalBalance")
             .and_then(|v| v.as_str())
-            .and_then(|s| s.parse::<u64>().ok())
-            .or_else(|| result.get("totalBalance").and_then(|v| v.as_u64()))
+            .and_then(|s| s.parse::<u128>().ok())
+            .or_else(|| result.get("totalBalance").and_then(|v| v.as_u64()).map(|n| n as u128))
             .unwrap_or(0);
         // Caller picks the right `decimals` from the token registry; default
         // to 9 (most Sui tokens use 9) so the value is at least usable.
-        Ok(Amount::new(Decimal::from(raw), 9))
+        Ok(Amount::new(wallet_types::decimal_from_u128(raw), 9))
+    }
+
+    /// Optimized batch token balance query via `suix_getAllBalances` in a single RPC call.
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Try single-RPC batch query via suix_getAllBalances
+        if let Ok(result) = self.rpc("suix_getAllBalances", json!([wallet.as_str()])).await {
+            if let Some(arr) = result.as_array() {
+                let mut balances: HashMap<String, Amount> = HashMap::new();
+                for item in arr {
+                    if let Some(coin_type) = item.get("coinType").and_then(|v| v.as_str()) {
+                        let raw = item
+                            .get("totalBalance")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse::<u128>().ok())
+                            .or_else(|| item.get("totalBalance").and_then(|v| v.as_u64()).map(|n| n as u128))
+                            .unwrap_or(0);
+                        balances.insert(
+                            coin_type.to_string(),
+                            Amount::new(wallet_types::decimal_from_u128(raw), 9),
+                        );
+                    }
+                }
+                let mut out = Vec::with_capacity(tokens.len());
+                for t in tokens {
+                    let bal = balances.get(t.as_str()).cloned().unwrap_or_else(|| Amount::zero(9));
+                    out.push((t.clone(), bal));
+                }
+                return Ok(out);
+            }
+        }
+
+        // Fallback: concurrent queries with join_all
+        let handles: Vec<_> = tokens
+            .iter()
+            .map(|t| {
+                let token = t.clone();
+                async move {
+                    let bal = self
+                        .token_balance(wallet, &token)
+                        .await
+                        .unwrap_or_else(|_| Amount::zero(9));
+                    (token, bal)
+                }
+            })
+            .collect();
+        Ok(futures::future::join_all(handles).await)
     }
 }
 

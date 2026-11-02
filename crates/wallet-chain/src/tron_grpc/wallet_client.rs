@@ -21,7 +21,7 @@ pub mod wallet_client {
     }
     impl<T> WalletClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -42,13 +42,13 @@ pub mod wallet_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             WalletClient::new(InterceptedService::new(inner, interceptor))
@@ -97,7 +97,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAccount",
             );
@@ -119,7 +119,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAccountById",
             );
@@ -144,7 +144,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAccountBalance",
             );
@@ -169,7 +169,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockBalanceTrace",
             );
@@ -191,7 +191,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateTransaction",
             );
@@ -216,7 +216,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateTransaction2",
             );
@@ -238,7 +238,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/BroadcastTransaction",
             );
@@ -260,7 +260,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateAccount",
             );
@@ -282,7 +282,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/SetAccountId",
             );
@@ -307,7 +307,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateAccount2",
             );
@@ -329,7 +329,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/VoteWitnessAccount",
             );
@@ -354,7 +354,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateSetting",
             );
@@ -379,7 +379,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateEnergyLimit",
             );
@@ -404,7 +404,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/VoteWitnessAccount2",
             );
@@ -426,7 +426,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateAssetIssue",
             );
@@ -451,7 +451,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateAssetIssue2",
             );
@@ -473,7 +473,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateWitness",
             );
@@ -498,7 +498,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateWitness2",
             );
@@ -520,7 +520,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateAccount",
             );
@@ -545,7 +545,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateAccount2",
             );
@@ -567,7 +567,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateWitness",
             );
@@ -592,7 +592,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateWitness2",
             );
@@ -614,7 +614,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/TransferAsset",
             );
@@ -639,7 +639,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/TransferAsset2",
             );
@@ -661,7 +661,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ParticipateAssetIssue",
             );
@@ -686,7 +686,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ParticipateAssetIssue2",
             );
@@ -708,7 +708,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/FreezeBalance",
             );
@@ -733,7 +733,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/FreezeBalance2",
             );
@@ -758,7 +758,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/FreezeBalanceV2",
             );
@@ -780,7 +780,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UnfreezeBalance",
             );
@@ -805,7 +805,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UnfreezeBalance2",
             );
@@ -830,7 +830,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UnfreezeBalanceV2",
             );
@@ -852,7 +852,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UnfreezeAsset",
             );
@@ -877,7 +877,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UnfreezeAsset2",
             );
@@ -899,7 +899,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/WithdrawBalance",
             );
@@ -924,7 +924,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/WithdrawBalance2",
             );
@@ -949,7 +949,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/WithdrawExpireUnfreeze",
             );
@@ -974,7 +974,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/DelegateResource",
             );
@@ -999,7 +999,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UnDelegateResource",
             );
@@ -1024,7 +1024,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CancelAllUnfreezeV2",
             );
@@ -1046,7 +1046,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateAsset",
             );
@@ -1071,7 +1071,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateAsset2",
             );
@@ -1096,7 +1096,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ProposalCreate",
             );
@@ -1121,7 +1121,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ProposalApprove",
             );
@@ -1146,7 +1146,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ProposalDelete",
             );
@@ -1171,7 +1171,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/BuyStorage",
             );
@@ -1196,7 +1196,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/BuyStorageBytes",
             );
@@ -1221,7 +1221,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/SellStorage",
             );
@@ -1246,7 +1246,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ExchangeCreate",
             );
@@ -1271,7 +1271,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ExchangeInject",
             );
@@ -1296,7 +1296,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ExchangeWithdraw",
             );
@@ -1321,7 +1321,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ExchangeTransaction",
             );
@@ -1346,7 +1346,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/MarketSellAsset",
             );
@@ -1371,7 +1371,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/MarketCancelOrder",
             );
@@ -1393,7 +1393,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMarketOrderById",
             );
@@ -1418,7 +1418,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMarketOrderByAccount",
             );
@@ -1443,7 +1443,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMarketPriceByPair",
             );
@@ -1468,7 +1468,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMarketOrderListByPair",
             );
@@ -1493,7 +1493,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMarketPairList",
             );
@@ -1515,7 +1515,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ListNodes",
             );
@@ -1536,7 +1536,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAssetIssueByAccount",
             );
@@ -1561,7 +1561,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAccountNet",
             );
@@ -1586,7 +1586,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAccountResource",
             );
@@ -1611,7 +1611,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAssetIssueByName",
             );
@@ -1633,7 +1633,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAssetIssueListByName",
             );
@@ -1658,7 +1658,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAssetIssueById",
             );
@@ -1680,7 +1680,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetNowBlock",
             );
@@ -1702,7 +1702,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetNowBlock2",
             );
@@ -1724,7 +1724,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockByNum",
             );
@@ -1746,7 +1746,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockByNum2",
             );
@@ -1768,7 +1768,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionCountByBlockNum",
             );
@@ -1792,7 +1792,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockById",
             );
@@ -1814,7 +1814,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockByLimitNext",
             );
@@ -1839,7 +1839,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockByLimitNext2",
             );
@@ -1861,7 +1861,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockByLatestNum",
             );
@@ -1886,7 +1886,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBlockByLatestNum2",
             );
@@ -1908,7 +1908,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionById",
             );
@@ -1933,7 +1933,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/DeployContract",
             );
@@ -1955,7 +1955,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetContract",
             );
@@ -1980,7 +1980,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetContractInfo",
             );
@@ -2005,7 +2005,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/TriggerContract",
             );
@@ -2030,7 +2030,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/TriggerConstantContract",
             );
@@ -2055,7 +2055,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/EstimateEnergy",
             );
@@ -2080,7 +2080,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ClearContractABI",
             );
@@ -2102,7 +2102,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ListWitnesses",
             );
@@ -2127,7 +2127,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetDelegatedResource",
             );
@@ -2152,7 +2152,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetDelegatedResourceV2",
             );
@@ -2177,7 +2177,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetDelegatedResourceAccountIndex",
             );
@@ -2207,7 +2207,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetDelegatedResourceAccountIndexV2",
             );
@@ -2237,7 +2237,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetCanDelegatedMaxSize",
             );
@@ -2264,7 +2264,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAvailableUnfreezeCount",
             );
@@ -2291,7 +2291,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetCanWithdrawUnfreezeAmount",
             );
@@ -2315,7 +2315,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ListProposals",
             );
@@ -2337,7 +2337,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetPaginatedProposalList",
             );
@@ -2359,7 +2359,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetProposalById",
             );
@@ -2381,7 +2381,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ListExchanges",
             );
@@ -2403,7 +2403,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetPaginatedExchangeList",
             );
@@ -2425,7 +2425,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetExchangeById",
             );
@@ -2450,7 +2450,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetChainParameters",
             );
@@ -2472,7 +2472,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAssetIssueList",
             );
@@ -2494,7 +2494,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetPaginatedAssetIssueList",
             );
@@ -2518,7 +2518,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/TotalTransaction",
             );
@@ -2540,7 +2540,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetNextMaintenanceTime",
             );
@@ -2565,7 +2565,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionInfoById",
             );
@@ -2590,7 +2590,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/AccountPermissionUpdate",
             );
@@ -2615,7 +2615,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionSignWeight",
             );
@@ -2640,7 +2640,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionApprovedList",
             );
@@ -2664,7 +2664,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetNodeInfo",
             );
@@ -2686,7 +2686,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetRewardInfo",
             );
@@ -2708,7 +2708,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBrokerageInfo",
             );
@@ -2733,7 +2733,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/UpdateBrokerage",
             );
@@ -2758,7 +2758,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateShieldedTransaction",
             );
@@ -2783,7 +2783,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMerkleTreeVoucherInfo",
             );
@@ -2805,7 +2805,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ScanNoteByIvk",
             );
@@ -2830,7 +2830,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ScanAndMarkNoteByIvk",
             );
@@ -2852,7 +2852,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ScanNoteByOvk",
             );
@@ -2874,7 +2874,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetSpendingKey",
             );
@@ -2899,7 +2899,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetExpandedSpendingKey",
             );
@@ -2921,7 +2921,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetAkFromAsk",
             );
@@ -2943,7 +2943,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetNkFromNsk",
             );
@@ -2968,7 +2968,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetIncomingViewingKey",
             );
@@ -2993,7 +2993,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetDiversifier",
             );
@@ -3018,7 +3018,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetNewShieldedAddress",
             );
@@ -3043,7 +3043,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetZenPaymentAddress",
             );
@@ -3065,7 +3065,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/protocol.Wallet/GetRcm");
             let mut req = request.into_request();
             req.extensions_mut().insert(GrpcMethod::new("protocol.Wallet", "GetRcm"));
@@ -3084,7 +3084,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/protocol.Wallet/IsSpend");
             let mut req = request.into_request();
             req.extensions_mut().insert(GrpcMethod::new("protocol.Wallet", "IsSpend"));
@@ -3106,7 +3106,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateShieldedTransactionWithoutSpendAuthSig",
             );
@@ -3133,7 +3133,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetShieldTransactionHash",
             );
@@ -3155,7 +3155,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateSpendAuthSig",
             );
@@ -3177,7 +3177,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateShieldNullifier",
             );
@@ -3202,7 +3202,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateShieldedContractParameters",
             );
@@ -3234,7 +3234,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateShieldedContractParametersWithoutAsk",
             );
@@ -3264,7 +3264,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ScanShieldedTRC20NotesByIvk",
             );
@@ -3291,7 +3291,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/ScanShieldedTRC20NotesByOvk",
             );
@@ -3318,7 +3318,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/IsShieldedTRC20ContractNoteSpent",
             );
@@ -3347,7 +3347,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTriggerInputForShieldedTRC20Contract",
             );
@@ -3377,7 +3377,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/CreateCommonTransaction",
             );
@@ -3402,7 +3402,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionInfoByBlockNum",
             );
@@ -3426,7 +3426,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBurnTrx",
             );
@@ -3448,7 +3448,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionFromPending",
             );
@@ -3473,7 +3473,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetTransactionListFromPending",
             );
@@ -3497,7 +3497,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetPendingSize",
             );
@@ -3519,7 +3519,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/protocol.Wallet/GetBlock");
             let mut req = request.into_request();
             req.extensions_mut().insert(GrpcMethod::new("protocol.Wallet", "GetBlock"));
@@ -3541,7 +3541,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetBandwidthPrices",
             );
@@ -3566,7 +3566,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetEnergyPrices",
             );
@@ -3591,7 +3591,7 @@ pub mod wallet_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Wallet/GetMemoFee",
             );
@@ -4498,7 +4498,7 @@ pub mod wallet_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -4537,7 +4537,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4581,7 +4581,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4627,7 +4627,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountBalanceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4676,7 +4676,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockBalanceTraceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4720,7 +4720,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4764,7 +4764,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateTransaction2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4808,7 +4808,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = BroadcastTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4854,7 +4854,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4900,7 +4900,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = SetAccountIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4946,7 +4946,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateAccount2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -4992,7 +4992,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = VoteWitnessAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5038,7 +5038,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateSettingSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5084,7 +5084,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateEnergyLimitSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5130,7 +5130,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = VoteWitnessAccount2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5176,7 +5176,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateAssetIssueSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5222,7 +5222,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateAssetIssue2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5268,7 +5268,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateWitnessSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5314,7 +5314,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateWitness2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5360,7 +5360,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5406,7 +5406,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateAccount2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5452,7 +5452,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateWitnessSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5498,7 +5498,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateWitness2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5544,7 +5544,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransferAssetSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5590,7 +5590,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TransferAsset2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5636,7 +5636,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ParticipateAssetIssueSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5682,7 +5682,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ParticipateAssetIssue2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5728,7 +5728,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = FreezeBalanceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5774,7 +5774,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = FreezeBalance2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5820,7 +5820,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = FreezeBalanceV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5866,7 +5866,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UnfreezeBalanceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5912,7 +5912,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UnfreezeBalance2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -5958,7 +5958,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UnfreezeBalanceV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6004,7 +6004,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UnfreezeAssetSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6050,7 +6050,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UnfreezeAsset2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6096,7 +6096,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = WithdrawBalanceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6142,7 +6142,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = WithdrawBalance2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6190,7 +6190,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = WithdrawExpireUnfreezeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6236,7 +6236,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DelegateResourceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6282,7 +6282,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UnDelegateResourceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6328,7 +6328,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CancelAllUnfreezeV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6374,7 +6374,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateAssetSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6420,7 +6420,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateAsset2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6466,7 +6466,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ProposalCreateSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6512,7 +6512,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ProposalApproveSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6558,7 +6558,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ProposalDeleteSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6602,7 +6602,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = BuyStorageSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6648,7 +6648,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = BuyStorageBytesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6694,7 +6694,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = SellStorageSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6740,7 +6740,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ExchangeCreateSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6786,7 +6786,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ExchangeInjectSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6832,7 +6832,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ExchangeWithdrawSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6878,7 +6878,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ExchangeTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6924,7 +6924,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = MarketSellAssetSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -6970,7 +6970,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = MarketCancelOrderSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7014,7 +7014,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketOrderByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7058,7 +7058,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketOrderByAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7102,7 +7102,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketPriceByPairSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7146,7 +7146,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketOrderListByPairSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7190,7 +7190,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketPairListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7232,7 +7232,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListNodesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7276,7 +7276,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueByAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7320,7 +7320,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountNetSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7364,7 +7364,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountResourceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7408,7 +7408,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueByNameSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7452,7 +7452,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueListByNameSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7496,7 +7496,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7540,7 +7540,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNowBlockSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7584,7 +7584,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNowBlock2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7628,7 +7628,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7672,7 +7672,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByNum2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7716,7 +7716,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionCountByBlockNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7760,7 +7760,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7804,7 +7804,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByLimitNextSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7848,7 +7848,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByLimitNext2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7892,7 +7892,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByLatestNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7936,7 +7936,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByLatestNum2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -7980,7 +7980,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8026,7 +8026,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = DeployContractSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8070,7 +8070,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetContractSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8114,7 +8114,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetContractInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8160,7 +8160,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TriggerContractSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8206,7 +8206,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TriggerConstantContractSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8252,7 +8252,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = EstimateEnergySvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8296,7 +8296,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ClearContractABISvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8340,7 +8340,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListWitnessesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8386,7 +8386,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8432,7 +8432,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8476,7 +8476,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceAccountIndexSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8522,7 +8522,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceAccountIndexV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8571,7 +8571,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetCanDelegatedMaxSizeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8620,7 +8620,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAvailableUnfreezeCountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8669,7 +8669,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetCanWithdrawUnfreezeAmountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8713,7 +8713,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListProposalsSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8757,7 +8757,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPaginatedProposalListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8801,7 +8801,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetProposalByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8845,7 +8845,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListExchangesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8889,7 +8889,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPaginatedExchangeListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8933,7 +8933,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetExchangeByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -8977,7 +8977,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetChainParametersSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9021,7 +9021,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9065,7 +9065,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPaginatedAssetIssueListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9109,7 +9109,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TotalTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9153,7 +9153,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNextMaintenanceTimeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9197,7 +9197,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionInfoByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9245,7 +9245,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = AccountPermissionUpdateSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9289,7 +9289,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionSignWeightSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9333,7 +9333,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionApprovedListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9377,7 +9377,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNodeInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9421,7 +9421,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetRewardInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9465,7 +9465,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBrokerageInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9511,7 +9511,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = UpdateBrokerageSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9555,7 +9555,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateShieldedTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9599,7 +9599,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMerkleTreeVoucherInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9645,7 +9645,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanNoteByIvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9691,7 +9691,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanAndMarkNoteByIvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9737,7 +9737,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanNoteByOvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9781,7 +9781,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetSpendingKeySvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9825,7 +9825,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetExpandedSpendingKeySvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9869,7 +9869,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAkFromAskSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9913,7 +9913,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNkFromNskSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -9957,7 +9957,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetIncomingViewingKeySvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10001,7 +10001,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDiversifierSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10045,7 +10045,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNewShieldedAddressSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10094,7 +10094,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetZenPaymentAddressSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10136,7 +10136,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetRcmSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10178,7 +10178,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = IsSpendSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10230,7 +10230,7 @@ pub mod wallet_server {
                         let method = CreateShieldedTransactionWithoutSpendAuthSigSvc(
                             inner,
                         );
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10274,7 +10274,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetShieldTransactionHashSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10320,7 +10320,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateSpendAuthSigSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10364,7 +10364,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateShieldNullifierSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10412,7 +10412,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateShieldedContractParametersSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10467,7 +10467,7 @@ pub mod wallet_server {
                         let method = CreateShieldedContractParametersWithoutAskSvc(
                             inner,
                         );
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10513,7 +10513,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanShieldedTRC20NotesByIvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10559,7 +10559,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanShieldedTRC20NotesByOvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10605,7 +10605,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = IsShieldedTRC20ContractNoteSpentSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10658,7 +10658,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTriggerInputForShieldedTRC20ContractSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10702,7 +10702,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CreateCommonTransactionSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10746,7 +10746,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionInfoByBlockNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10790,7 +10790,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBurnTrxSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10834,7 +10834,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionFromPendingSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10878,7 +10878,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionListFromPendingSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10922,7 +10922,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPendingSizeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -10964,7 +10964,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -11008,7 +11008,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBandwidthPricesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -11052,7 +11052,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetEnergyPricesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -11096,7 +11096,7 @@ pub mod wallet_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMemoFeeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -11118,7 +11118,7 @@ pub mod wallet_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })
@@ -11174,7 +11174,7 @@ pub mod wallet_solidity_client {
     }
     impl<T> WalletSolidityClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -11195,13 +11195,13 @@ pub mod wallet_solidity_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             WalletSolidityClient::new(InterceptedService::new(inner, interceptor))
@@ -11250,7 +11250,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAccount",
             );
@@ -11272,7 +11272,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAccountById",
             );
@@ -11294,7 +11294,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ListWitnesses",
             );
@@ -11316,7 +11316,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAssetIssueList",
             );
@@ -11338,7 +11338,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetPaginatedAssetIssueList",
             );
@@ -11368,7 +11368,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAssetIssueByName",
             );
@@ -11392,7 +11392,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAssetIssueListByName",
             );
@@ -11419,7 +11419,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAssetIssueById",
             );
@@ -11441,7 +11441,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetNowBlock",
             );
@@ -11463,7 +11463,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetNowBlock2",
             );
@@ -11485,7 +11485,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetBlockByNum",
             );
@@ -11507,7 +11507,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetBlockByNum2",
             );
@@ -11529,7 +11529,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetTransactionCountByBlockNum",
             );
@@ -11559,7 +11559,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetDelegatedResource",
             );
@@ -11586,7 +11586,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetDelegatedResourceV2",
             );
@@ -11613,7 +11613,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetDelegatedResourceAccountIndex",
             );
@@ -11643,7 +11643,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetDelegatedResourceAccountIndexV2",
             );
@@ -11673,7 +11673,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetCanDelegatedMaxSize",
             );
@@ -11702,7 +11702,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetAvailableUnfreezeCount",
             );
@@ -11734,7 +11734,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetCanWithdrawUnfreezeAmount",
             );
@@ -11761,7 +11761,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetExchangeById",
             );
@@ -11783,7 +11783,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ListExchanges",
             );
@@ -11805,7 +11805,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetTransactionById",
             );
@@ -11832,7 +11832,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetTransactionInfoById",
             );
@@ -11859,7 +11859,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetMerkleTreeVoucherInfo",
             );
@@ -11886,7 +11886,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ScanNoteByIvk",
             );
@@ -11911,7 +11911,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ScanAndMarkNoteByIvk",
             );
@@ -11935,7 +11935,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ScanNoteByOvk",
             );
@@ -11957,7 +11957,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/IsSpend",
             );
@@ -11982,7 +11982,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ScanShieldedTRC20NotesByIvk",
             );
@@ -12012,7 +12012,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/ScanShieldedTRC20NotesByOvk",
             );
@@ -12042,7 +12042,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/IsShieldedTRC20ContractNoteSpent",
             );
@@ -12069,7 +12069,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetRewardInfo",
             );
@@ -12091,7 +12091,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetBrokerageInfo",
             );
@@ -12116,7 +12116,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/TriggerConstantContract",
             );
@@ -12143,7 +12143,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/EstimateEnergy",
             );
@@ -12168,7 +12168,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetTransactionInfoByBlockNum",
             );
@@ -12195,7 +12195,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetMarketOrderById",
             );
@@ -12222,7 +12222,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetMarketOrderByAccount",
             );
@@ -12249,7 +12249,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetMarketPriceByPair",
             );
@@ -12276,7 +12276,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetMarketOrderListByPair",
             );
@@ -12306,7 +12306,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetMarketPairList",
             );
@@ -12328,7 +12328,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetBurnTrx",
             );
@@ -12350,7 +12350,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetBlock",
             );
@@ -12375,7 +12375,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetBandwidthPrices",
             );
@@ -12402,7 +12402,7 @@ pub mod wallet_solidity_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletSolidity/GetEnergyPrices",
             );
@@ -12729,7 +12729,7 @@ pub mod wallet_solidity_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -12768,7 +12768,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -12812,7 +12812,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAccountByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -12858,7 +12858,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListWitnessesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -12904,7 +12904,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -12950,7 +12950,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetPaginatedAssetIssueListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -12996,7 +12996,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueByNameSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13042,7 +13042,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueListByNameSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13088,7 +13088,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAssetIssueByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13134,7 +13134,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNowBlockSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13180,7 +13180,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNowBlock2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13226,7 +13226,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13272,7 +13272,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByNum2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13320,7 +13320,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionCountByBlockNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13366,7 +13366,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13412,7 +13412,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13460,7 +13460,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceAccountIndexSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13510,7 +13510,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDelegatedResourceAccountIndexV2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13559,7 +13559,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetCanDelegatedMaxSizeSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13608,7 +13608,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetAvailableUnfreezeCountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13659,7 +13659,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetCanWithdrawUnfreezeAmountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13705,7 +13705,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetExchangeByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13751,7 +13751,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ListExchangesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13797,7 +13797,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13843,7 +13843,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionInfoByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13889,7 +13889,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMerkleTreeVoucherInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13935,7 +13935,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanNoteByIvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -13981,7 +13981,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanAndMarkNoteByIvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14027,7 +14027,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanNoteByOvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14071,7 +14071,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = IsSpendSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14117,7 +14117,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanShieldedTRC20NotesByIvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14163,7 +14163,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = ScanShieldedTRC20NotesByOvkSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14213,7 +14213,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = IsShieldedTRC20ContractNoteSpentSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14259,7 +14259,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetRewardInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14305,7 +14305,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBrokerageInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14351,7 +14351,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = TriggerConstantContractSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14397,7 +14397,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = EstimateEnergySvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14445,7 +14445,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionInfoByBlockNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14491,7 +14491,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketOrderByIdSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14537,7 +14537,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketOrderByAccountSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14583,7 +14583,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketPriceByPairSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14629,7 +14629,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketOrderListByPairSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14675,7 +14675,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetMarketPairListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14721,7 +14721,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBurnTrxSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14763,7 +14763,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14809,7 +14809,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBandwidthPricesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14855,7 +14855,7 @@ pub mod wallet_solidity_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetEnergyPricesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -14877,7 +14877,7 @@ pub mod wallet_solidity_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })
@@ -14933,7 +14933,7 @@ pub mod wallet_extension_client {
     }
     impl<T> WalletExtensionClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -14954,13 +14954,13 @@ pub mod wallet_extension_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             WalletExtensionClient::new(InterceptedService::new(inner, interceptor))
@@ -15012,7 +15012,7 @@ pub mod wallet_extension_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletExtension/GetTransactionsFromThis",
             );
@@ -15042,7 +15042,7 @@ pub mod wallet_extension_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletExtension/GetTransactionsFromThis2",
             );
@@ -15072,7 +15072,7 @@ pub mod wallet_extension_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletExtension/GetTransactionsToThis",
             );
@@ -15099,7 +15099,7 @@ pub mod wallet_extension_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.WalletExtension/GetTransactionsToThis2",
             );
@@ -15209,7 +15209,7 @@ pub mod wallet_extension_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -15252,7 +15252,7 @@ pub mod wallet_extension_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionsFromThisSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15298,7 +15298,7 @@ pub mod wallet_extension_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionsFromThis2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15344,7 +15344,7 @@ pub mod wallet_extension_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionsToThisSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15390,7 +15390,7 @@ pub mod wallet_extension_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetTransactionsToThis2Svc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15412,7 +15412,7 @@ pub mod wallet_extension_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })
@@ -15468,7 +15468,7 @@ pub mod database_client {
     }
     impl<T> DatabaseClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -15489,13 +15489,13 @@ pub mod database_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             DatabaseClient::new(InterceptedService::new(inner, interceptor))
@@ -15544,7 +15544,7 @@ pub mod database_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Database/getBlockReference",
             );
@@ -15569,7 +15569,7 @@ pub mod database_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Database/GetDynamicProperties",
             );
@@ -15591,7 +15591,7 @@ pub mod database_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Database/GetNowBlock",
             );
@@ -15613,7 +15613,7 @@ pub mod database_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Database/GetBlockByNum",
             );
@@ -15718,7 +15718,7 @@ pub mod database_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -15759,7 +15759,7 @@ pub mod database_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = getBlockReferenceSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15803,7 +15803,7 @@ pub mod database_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetDynamicPropertiesSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15847,7 +15847,7 @@ pub mod database_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetNowBlockSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15891,7 +15891,7 @@ pub mod database_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetBlockByNumSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -15913,7 +15913,7 @@ pub mod database_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })
@@ -15969,7 +15969,7 @@ pub mod monitor_client {
     }
     impl<T> MonitorClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -15990,13 +15990,13 @@ pub mod monitor_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             MonitorClient::new(InterceptedService::new(inner, interceptor))
@@ -16045,7 +16045,7 @@ pub mod monitor_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.Monitor/GetStatsInfo",
             );
@@ -16135,7 +16135,7 @@ pub mod monitor_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -16176,7 +16176,7 @@ pub mod monitor_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = GetStatsInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -16198,7 +16198,7 @@ pub mod monitor_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })
@@ -16254,7 +16254,7 @@ pub mod network_client {
     }
     impl<T> NetworkClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -16275,13 +16275,13 @@ pub mod network_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             NetworkClient::new(InterceptedService::new(inner, interceptor))
@@ -16393,7 +16393,7 @@ pub mod network_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -16412,7 +16412,7 @@ pub mod network_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })
@@ -16468,7 +16468,7 @@ pub mod tron_zksnark_client {
     }
     impl<T> TronZksnarkClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + Send,
@@ -16489,13 +16489,13 @@ pub mod tron_zksnark_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + Send + Sync,
         {
             TronZksnarkClient::new(InterceptedService::new(inner, interceptor))
@@ -16547,7 +16547,7 @@ pub mod tron_zksnark_client {
                         format!("Service was not ready: {}", e.into()),
                     )
                 })?;
-            let codec = tonic::codec::ProstCodec::default();
+            let codec = tonic_prost::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/protocol.TronZksnark/CheckZksnarkProof",
             );
@@ -16637,7 +16637,7 @@ pub mod tron_zksnark_server {
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -16680,7 +16680,7 @@ pub mod tron_zksnark_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = CheckZksnarkProofSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,
@@ -16702,7 +16702,7 @@ pub mod tron_zksnark_server {
                                 .status(200)
                                 .header("grpc-status", "12")
                                 .header("content-type", "application/grpc")
-                                .body(empty_body())
+                                .body(tonic::body::Body::empty())
                                 .unwrap(),
                         )
                     })

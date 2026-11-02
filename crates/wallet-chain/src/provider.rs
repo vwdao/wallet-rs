@@ -68,6 +68,8 @@ impl RpcPool {
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(32)
             .tcp_keepalive(Duration::from_secs(60))
+            .timeout(Duration::from_secs(20))
+            .connect_timeout(Duration::from_secs(8))
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         Ok(Self {

@@ -59,30 +59,48 @@ pub async fn start(
                 );
 
                 let mut reindexed = 0u64;
-                for height in from_block..=to_block {
-                    match chain.fetch_block_txs(height).await {
-                        Ok(raw_txs) => {
-                            let normalized = parse_block(chain_index, height, raw_txs);
-                            let tx_count = normalized.len();
-                            // Persist + report concurrently, same as the
-                            // main sync loop, so reindex throughput is not
-                            // bounded by sequential per-tx DB calls.
-                            let persist = repo.insert_normalized_batch(chain_index, &normalized);
-                            let report = report_txs(bus.as_ref(), chain_index, &normalized);
-                            if let Err(e) =
-                                tokio::try_join!(persist, report)
-                            {
-                                error!(height, error = %e, "reindex: persist/report failed");
+                let concurrency = 8;
+                let mut cursor = from_block;
+                while cursor <= to_block {
+                    let batch_end = std::cmp::min(to_block, cursor + concurrency as u64 - 1);
+                    let heights: Vec<u64> = (cursor..=batch_end).collect();
+                    let fetches: Vec<_> = heights
+                        .iter()
+                        .map(|&h| {
+                            let chain = chain.clone();
+                            async move {
+                                let res = chain.fetch_block_txs(h).await;
+                                (h, res)
                             }
-                            reindexed += 1;
-                            if reindexed.is_multiple_of(100) {
-                                info!(height, txs = tx_count, "reindex progress");
+                        })
+                        .collect();
+                    let results = futures::future::join_all(fetches).await;
+                    for (height, res) in results {
+                        match res {
+                            Ok(raw_txs) => {
+                                let normalized = parse_block(chain_index, height, raw_txs);
+                                let tx_count = normalized.len();
+                                // Persist + report concurrently, same as the
+                                // main sync loop, so reindex throughput is not
+                                // bounded by sequential per-tx DB calls.
+                                let persist = repo.insert_normalized_batch(chain_index, &normalized);
+                                let report = report_txs(bus.as_ref(), chain_index, &normalized);
+                                if let Err(e) =
+                                    tokio::try_join!(persist, report)
+                                {
+                                    error!(height, error = %e, "reindex: persist/report failed");
+                                }
+                                reindexed += 1;
+                                if reindexed.is_multiple_of(100) {
+                                    info!(height, txs = tx_count, "reindex progress");
+                                }
                             }
-                        }
-                        Err(e) => {
-                            error!(height, error = %e, "reindex: fetch block failed");
+                            Err(e) => {
+                                error!(height, error = %e, "reindex: fetch block failed");
+                            }
                         }
                     }
+                    cursor = batch_end + 1;
                 }
 
                 // Update sync cursor to the reindexed range

@@ -91,10 +91,6 @@ impl<'a> MarketService<'a> {
         let Some(ch) = &self.state.clickhouse else {
             return Ok(());
         };
-        let mut insert = ch
-            .client()
-            .insert("dex_trade")
-            .map_err(|e| AppError::Unavailable(e.to_string()))?;
         #[derive(clickhouse::Row, serde::Serialize)]
         struct DexRow {
             chain_index: i64,
@@ -102,6 +98,11 @@ impl<'a> MarketService<'a> {
             ts: i64,
             payload: String,
         }
+        let mut insert = ch
+            .client()
+            .insert::<DexRow>("dex_trade")
+            .await
+            .map_err(|e| AppError::Unavailable(e.to_string()))?;
         insert
             .write(&DexRow {
                 chain_index,

@@ -158,27 +158,40 @@ impl<'a> TransactionService<'a> {
         let (rows, total) = self.list_by_filter(opts).await?;
         let items = rows
             .into_iter()
-            .map(|r| TransactionSummaryItem {
-                txn: r.hash,
-                chain_index: r.chain_index,
-                chain_name: format!("Chain {}", r.chain_index),
-                from_address: r.from_address.unwrap_or_default(),
-                to_address: r.to_address.unwrap_or_default(),
-                value: r.value.to_string(),
-                fee: r.gas_fee.map(|g| g.to_string()).unwrap_or_default(),
-                tx_type: r.method.unwrap_or_else(|| "transfer".to_string()),
-                token_address: r.contract_address.unwrap_or_default(),
-                timestamp: 0,
-                status: r.status,
-                block_number: r.block_number,
-                token_decimal: 18,
-                token_symbol: String::new(),
-                token_logo_url: String::new(),
-                token_name: String::new(),
-                risk_level: "low".to_string(),
-                is_spam: false,
-                price: "0".to_string(),
-                native_price: "0".to_string(),
+            .map(|r| {
+                let chain_idx = ChainIndex::new(r.chain_index);
+                let is_native = r.contract_address.as_ref().map(|s| s.is_empty()).unwrap_or(true);
+                let (sym, name, dec) = if is_native {
+                    (
+                        chain_idx.native_symbol().to_string(),
+                        chain_idx.native_name().to_string(),
+                        chain_idx.native_decimals() as i64,
+                    )
+                } else {
+                    (String::new(), String::new(), 18)
+                };
+                TransactionSummaryItem {
+                    txn: r.hash,
+                    chain_index: r.chain_index,
+                    chain_name: chain_idx.native_name().to_string(),
+                    from_address: r.from_address.unwrap_or_default(),
+                    to_address: r.to_address.unwrap_or_default(),
+                    value: r.value.to_string(),
+                    fee: r.gas_fee.map(|g| g.to_string()).unwrap_or_default(),
+                    tx_type: r.method.unwrap_or_else(|| "transfer".to_string()),
+                    token_address: r.contract_address.unwrap_or_default(),
+                    timestamp: r.created_at.as_second(),
+                    status: r.status,
+                    block_number: r.block_number,
+                    token_decimal: dec,
+                    token_symbol: sym,
+                    token_logo_url: String::new(),
+                    token_name: name,
+                    risk_level: "low".to_string(),
+                    is_spam: false,
+                    price: "0".to_string(),
+                    native_price: "0".to_string(),
+                }
             })
             .collect();
         Ok((items, total))
@@ -198,7 +211,7 @@ impl<'a> TransactionService<'a> {
             fee: row.gas_fee.map(|g| g.to_string()).unwrap_or_default(),
             tx_type: row.method.unwrap_or_else(|| "transfer".to_string()),
             token_address: row.contract_address.unwrap_or_default(),
-            timestamp: 0,
+            timestamp: row.created_at.as_second(),
             status: row.status,
             block_number: row.block_number,
             chain_index: row.chain_index,

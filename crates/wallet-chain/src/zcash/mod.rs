@@ -84,7 +84,7 @@ impl BalanceReader for ZcashChain {
             .rpc("getreceivedbyaddress", json!([addr.as_str(), 0]))
             .await?;
         let zec = v.as_f64().unwrap_or(0.0);
-        let zats = (zec * 1e8) as u64;
+        let zats = (zec * 1e8).round() as u64;
         Ok(Amount::new(Decimal::from(zats), 8))
     }
 }

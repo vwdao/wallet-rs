@@ -10,6 +10,7 @@ wallet-config = { workspace = true }
 wallet-chain = { workspace = true }
 wallet-db = { workspace = true }
 wallet-events = { workspace = true }
+futures = { workspace = true }
 toasty = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }

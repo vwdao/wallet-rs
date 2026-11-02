@@ -18,7 +18,7 @@ dispatch**, not a single fat `dyn Chain`.
 |---|---|
 | Fat `Chain` + `HashMap<dyn Chain>` | Capability traits + `ChainHandle` / registry by `ChainIndex` |
 | Toasty | **sqlx** + SQL migrations |
-| Salvo | **axum** |
+| Axum | **Salvo 1.0** |
 | Middleware in `common` | `wallet-types` / `wallet-error` / `wallet-config`; HTTP/gRPC middleware in binaries |
 | Kafka→NATS hard-wired in domain | `wallet-events::EventBus`; **NATS JetStream** impl |
 | Three proto families | One `proto/wallet/v1` (incl. `admin/`); gateways use HTTP DTOs only |
@@ -122,7 +122,7 @@ gRPC and HTTP types must not leak into domain.
 | Layer | Choice |
 |-------|--------|
 | gRPC | tonic + prost |
-| HTTP | axum |
+| HTTP | salvo 1.0 |
 | OLTP | sqlx (Postgres) |
 | Analytics | clickhouse-rs |
 | Cache | fred |
@@ -132,7 +132,7 @@ gRPC and HTTP types must not leak into domain.
 | Observability | tracing (+ OTel hooks) |
 | Config | serde_yaml |
 
-**Explicitly not used**: Toasty, Salvo, domain code calling NATS APIs directly,
+**Explicitly not used**: domain code calling NATS APIs directly,
 duplicate domain protos on gateways.
 
 ## Phases

@@ -18,6 +18,7 @@ use wallet_types::{
 pub struct TronChain {
     pub chain_index: ChainIndex,
     pub pool: RpcPool,
+    pub decimals_cache: Arc<parking_lot::RwLock<HashMap<String, u32>>>,
     /// Per-endpoint typed gRPC clients keyed by the original `grpc(s)://...`
     /// URL from `cfg.endpoints`. Endpoints that aren't in the chain-gateway
     /// gRPC format have no entry and fall through to the HTTP path.
@@ -36,6 +37,7 @@ impl TronChain {
         Ok(Arc::new(Self {
             chain_index: ChainIndex(cfg.chain_index),
             pool: RpcPool::new(cfg.endpoints.clone())?,
+            decimals_cache: Arc::new(parking_lot::RwLock::new(HashMap::new())),
             grpc_clients,
         }))
     }
@@ -179,10 +181,26 @@ impl TronChain {
                             "triggerconstantcontract: invalid contract_address".into(),
                         )
                     })?;
-                let data_hex = body
+                let mut data_hex = body
                     .get("data")
                     .and_then(|v| v.as_str())
-                    .unwrap_or("0x");
+                    .unwrap_or("")
+                    .to_string();
+                if data_hex.is_empty() || data_hex == "0x" {
+                    if let Some(selector) = body.get("function_selector").and_then(|s| s.as_str()) {
+                        if selector == "balanceOf(address)" {
+                            if let Some(param) = body.get("parameter").and_then(|p| p.as_array()).and_then(|a| a.first()).and_then(|v| v.as_str()) {
+                                if let Some(b) = address_to_bytes(param) {
+                                    if b.len() == 21 {
+                                        data_hex = format!("70a08231{:0>64}", hex::encode(&b[1..]));
+                                    }
+                                }
+                            }
+                        } else if selector == "decimals()" {
+                            data_hex = "313ce567".to_string();
+                        }
+                    }
+                }
                 let data = hex::decode(data_hex.trim_start_matches("0x"))
                     .map_err(|e| AppError::InvalidArgument(format!("invalid data hex: {e}")))?;
                 client
@@ -375,6 +393,45 @@ impl TronChain {
             map.insert(normalize_txid(id), info);
         }
         map
+    }
+
+    /// Query TRC-20 token decimals with local caching.
+    pub async fn query_decimals(&self, token: &Address) -> u32 {
+        if let Some(&dec) = self.decimals_cache.read().get(token.as_str()) {
+            return dec;
+        }
+
+        // Fast-path known contracts: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t is Tether USDT (6 decimals)
+        if token.as_str() == "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t" {
+            self.decimals_cache.write().insert(token.as_str().to_string(), 6);
+            return 6;
+        }
+
+        let body = json!({
+            "owner_address": token.as_str(),
+            "contract_address": token.as_str(),
+            "function_selector": "decimals()",
+            "parameter": [],
+            "data": "313ce567",
+            "visible": true,
+        });
+        let decimals = match self.post("/wallet/triggerconstantcontract", body).await {
+            Ok(v) => {
+                if let Some(res) = v
+                    .get("constant_result")
+                    .and_then(|r| r.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|s| s.as_str())
+                {
+                    u32::from_str_radix(res.trim_start_matches("0x"), 16).unwrap_or(6)
+                } else {
+                    6
+                }
+            }
+            Err(_) => 6,
+        };
+        self.decimals_cache.write().insert(token.as_str().to_string(), decimals);
+        decimals
     }
 }
 
@@ -748,7 +805,18 @@ impl GasEstimator for TronChain {
 #[async_trait]
 impl TokenBalance for TronChain {
     async fn token_balance(&self, wallet: &Address, token: &Address) -> AppResult<Amount> {
-        // Use TRON RPC to query TRC20 balance
+        let decimals = self.query_decimals(token).await;
+
+        let calldata = if let Some(b) = address_to_bytes(wallet.as_str()) {
+            if b.len() == 21 {
+                format!("70a08231{:0>64}", hex::encode(&b[1..]))
+            } else {
+                "70a08231".to_string()
+            }
+        } else {
+            "70a08231".to_string()
+        };
+
         let v = self
             .post(
                 "/wallet/triggerconstantcontract",
@@ -757,6 +825,7 @@ impl TokenBalance for TronChain {
                     "contract_address": token.as_str(),
                     "function_selector": "balanceOf(address)",
                     "parameter": [wallet.as_str()],
+                    "data": calldata,
                     "visible": true,
                 }),
             )
@@ -764,11 +833,11 @@ impl TokenBalance for TronChain {
         if let Some(constant_result) = v.get("constant_result").and_then(|r| r.as_array()) {
             if let Some(first) = constant_result.first() {
                 let hex_str = first.as_str().unwrap_or("0");
-                let balance = u64::from_str_radix(hex_str, 16).unwrap_or(0);
-                return Ok(Amount::new(Decimal::from(balance), 6));
+                let balance = tron_hex_amount(hex_str);
+                return Ok(Amount::new(balance, decimals));
             }
         }
-        Ok(Amount::zero(6))
+        Ok(Amount::zero(decimals))
     }
 
     /// Concurrent batch query across endpoints for TRON tokens

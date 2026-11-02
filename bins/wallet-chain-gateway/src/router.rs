@@ -1,5 +1,5 @@
 use dashmap::DashMap;
-use rand::Rng;
+use rand::RngExt;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -320,8 +320,8 @@ impl RpcRouter {
         let candidates = &sorted[..top_n];
 
         let total_weight: i32 = candidates.iter().map(|e| self.effective_weight(e)).sum();
-        let mut rng = rand::thread_rng();
-        let mut pick = rng.gen_range(0..total_weight);
+        let mut rng = rand::rng();
+        let mut pick = rng.random_range(0..total_weight);
         for ep in candidates {
             pick -= self.effective_weight(ep);
             if pick < 0 {

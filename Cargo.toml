@@ -41,44 +41,44 @@ wallet-gateway = { path = "crates/wallet-gateway" }
 
 anyhow = "1"
 async-trait = "0.1"
-axum = { version = "0.8", features = ["ws", "macros"] }
-salvo = { version = "0.95", features = ["websocket", "cors", "oapi"] }
+salvo = { version = "1.0", features = ["websocket", "cors", "oapi"] }
 bytes = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }
 futures = "0.3"
 http = "1"
 hex = "0.4"
-jsonwebtoken = "9"
-prost = "0.13"
-prost-types = "0.13"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+jsonwebtoken = { version = "11", features = ["aws_lc_rs"] }
+prost = "0.14"
+prost-types = "0.14"
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls"] }
 rust_decimal = { version = "1", features = ["serde-with-str"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-sha2 = "0.10"
-hmac = "0.12"
+sha2 = "0.11"
+hmac = "0.13"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
-tonic = { version = "0.12", features = ["tls", "tls-webpki-roots"] }
-tonic-build = "0.12"
+tonic = { version = "0.14", features = ["tls-aws-lc", "tls-webpki-roots"] }
+tonic-prost = "0.14"
+tonic-prost-build = "0.14"
 tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 uuid = { version = "1", features = ["v4", "serde"] }
-async-nats = "0.39"
+async-nats = "0.51"
 fred = { version = "10", default-features = false, features = ["enable-rustls", "subscriber-client", "i-keys"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "uuid", "rust_decimal", "migrate"] }
-toasty = { version = "0.9", features = ["postgresql", "jiff", "rust_decimal", "serde"] }
-clickhouse = { version = "0.13", features = ["time", "uuid"] }
-tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
-rustls = { version = "0.23", features = ["ring"] }
-base64 = "0.22"
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "postgres", "chrono", "uuid", "rust_decimal", "migrate"] }
+toasty = { version = "0.11", features = ["postgresql", "jiff", "rust_decimal", "serde"] }
+clickhouse = { version = "0.15", features = ["time", "uuid"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
+rustls = { version = "0.23", features = ["aws-lc-rs"] }
+base64 = "0.23"
 dashmap = "6"
-parking_lot = "0.12"
-rand = "0.8"
+parking_lot = "0.13"
+rand = "0.10"
 url = "2"
 jiff = { version = "0.2", features = ["serde"] }
 ipnet = "2"

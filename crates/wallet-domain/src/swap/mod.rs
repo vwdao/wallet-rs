@@ -200,7 +200,7 @@ pub struct OkxProvider {
 }
 
 fn okx_hmac_sign(secret: &str, timestamp: &str, method: &str, path: &str, body: &str) -> String {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
     let message = format!("{}{}{}{}", timestamp, method, path, body);

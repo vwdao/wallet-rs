@@ -120,77 +120,122 @@ impl<'a> TokenService<'a> {
         &self,
         requests: &[WalletAddressChains],
     ) -> AppResult<Vec<WalletBalanceGroup>> {
-        let mut groups = Vec::with_capacity(requests.len());
+        if requests.is_empty() {
+            return Ok(Vec::new());
+        }
 
+        // 1. Collect all unique chain indices across all requests to avoid redundant DB queries
+        let mut unique_chains = std::collections::HashSet::new();
         for req in requests {
-            let mut wallet_balances = Vec::new();
-            let wallet_addr = match Address::parse(&req.address) {
-                Ok(a) => a,
-                Err(_) => {
-                    groups.push(WalletBalanceGroup {
-                        address: req.address.clone(),
-                        balances: vec![],
-                    });
-                    continue;
-                }
-            };
-
             for &ci in &req.chain_indexes {
-                let chain_idx = ChainIndex::new(ci);
-                if let Ok(chain) = self.state.chains.get(chain_idx) {
-                    // 1. Native balance
-                    if let Ok(native_bal) = chain.native_balance(&wallet_addr).await {
-                        wallet_balances.push(TokenBalanceItemDetail {
-                            chain_index: ci,
-                            address: "native".to_string(),
-                            name: format!("Native Chain {}", ci),
-                            symbol: "NATIVE".to_string(),
-                            decimals: 18,
-                            raw_balance: native_bal.raw.to_string(),
-                            price: "0".to_string(),
-                            logo_url: "".to_string(),
-                            is_official: true,
-                        });
-                    }
+                unique_chains.insert(ci);
+            }
+        }
 
-                    // 2. Query configured token list for this chain in batch
-                    if let Ok((tokens, _)) = TokenRepo::new(&self.state.db).list(chain_idx, 50, 0).await {
-                        let token_addrs: Vec<Address> = tokens
-                            .iter()
-                            .filter_map(|t| Address::parse(&t.address).ok())
-                            .collect();
-                        if let Ok(batch) = chain.token_balances_batch(&wallet_addr, &token_addrs).await {
-                            let meta_map: std::collections::HashMap<String, &TokenRow> = tokens
-                                .iter()
-                                .map(|t| (t.address.clone(), t))
-                                .collect();
-                            for (t_addr, tb) in batch {
-                                if !tb.is_zero() {
-                                    let meta = meta_map.get(t_addr.as_str());
-                                    wallet_balances.push(TokenBalanceItemDetail {
-                                        chain_index: ci,
-                                        address: t_addr.as_str().to_string(),
-                                        name: meta.map(|m| m.name.clone()).unwrap_or_default(),
-                                        symbol: meta.map(|m| m.symbol.clone()).unwrap_or_default(),
-                                        decimals: tb.decimals as i64,
-                                        raw_balance: tb.raw.to_string(),
-                                        price: "0".to_string(),
-                                        logo_url: meta.and_then(|m| m.logo_url.clone()).unwrap_or_default(),
-                                        is_official: true,
-                                    });
+        // 2. Fetch token list for each unique chain once from the DB concurrently
+        let token_fetch_futs = unique_chains.into_iter().map(|ci| {
+            let db = &self.state.db;
+            async move {
+                let chain_idx = ChainIndex::new(ci);
+                let tokens = TokenRepo::new(db)
+                    .list(chain_idx, 50, 0)
+                    .await
+                    .map(|(t, _)| t)
+                    .unwrap_or_default();
+                (ci, tokens)
+            }
+        });
+        let chain_tokens: std::collections::HashMap<i64, Vec<TokenRow>> =
+            futures::future::join_all(token_fetch_futs)
+                .await
+                .into_iter()
+                .collect();
+
+        // 3. For each wallet request, query all chains and tokens concurrently
+        let group_futs = requests.iter().map(|req| {
+            let chain_tokens = &chain_tokens;
+            async move {
+                let wallet_addr = match Address::parse(&req.address) {
+                    Ok(a) => a,
+                    Err(_) => {
+                        return WalletBalanceGroup {
+                            address: req.address.clone(),
+                            balances: vec![],
+                        };
+                    }
+                };
+
+                let chain_futs = req.chain_indexes.iter().map(|&ci| {
+                    let wallet_addr = wallet_addr.clone();
+                    async move {
+                        let mut items = Vec::new();
+                        let chain_idx = ChainIndex::new(ci);
+                        let Ok(chain) = self.state.chains.get(chain_idx) else {
+                            return items;
+                        };
+
+                        // 1. Native balance
+                        if let Ok(native_bal) = chain.native_balance(&wallet_addr).await {
+                            items.push(TokenBalanceItemDetail {
+                                chain_index: ci,
+                                address: "native".to_string(),
+                                name: chain_idx.native_name().to_string(),
+                                symbol: chain_idx.native_symbol().to_string(),
+                                decimals: chain_idx.native_decimals() as i64,
+                                raw_balance: native_bal.raw.to_string(),
+                                price: "0".to_string(),
+                                logo_url: "".to_string(),
+                                is_official: true,
+                            });
+                        }
+
+                        // 2. Query configured token list for this chain in batch
+                        if let Some(tokens) = chain_tokens.get(&ci) {
+                            if !tokens.is_empty() {
+                                let token_addrs: Vec<Address> = tokens
+                                    .iter()
+                                    .filter_map(|t| Address::parse(&t.address).ok())
+                                    .collect();
+                                if let Ok(batch) = chain.token_balances_batch(&wallet_addr, &token_addrs).await {
+                                    let meta_map: std::collections::HashMap<String, &TokenRow> = tokens
+                                        .iter()
+                                        .map(|t| (t.address.clone(), t))
+                                        .collect();
+                                    for (t_addr, tb) in batch {
+                                        if !tb.is_zero() {
+                                            let meta = meta_map.get(t_addr.as_str());
+                                            items.push(TokenBalanceItemDetail {
+                                                chain_index: ci,
+                                                address: t_addr.as_str().to_string(),
+                                                name: meta.map(|m| m.name.clone()).unwrap_or_default(),
+                                                symbol: meta.map(|m| m.symbol.clone()).unwrap_or_default(),
+                                                decimals: tb.decimals as i64,
+                                                raw_balance: tb.raw.to_string(),
+                                                price: "0".to_string(),
+                                                logo_url: meta.and_then(|m| m.logo_url.clone()).unwrap_or_default(),
+                                                is_official: true,
+                                            });
+                                        }
+                                    }
                                 }
                             }
                         }
+
+                        items
                     }
+                });
+
+                let chain_results = futures::future::join_all(chain_futs).await;
+                let wallet_balances: Vec<TokenBalanceItemDetail> = chain_results.into_iter().flatten().collect();
+
+                WalletBalanceGroup {
+                    address: req.address.clone(),
+                    balances: wallet_balances,
                 }
             }
+        });
 
-            groups.push(WalletBalanceGroup {
-                address: req.address.clone(),
-                balances: wallet_balances,
-            });
-        }
-
+        let groups = futures::future::join_all(group_futs).await;
         Ok(groups)
     }
 
@@ -202,11 +247,15 @@ impl<'a> TokenService<'a> {
         _end_time: i64,
         _time_agg: &str,
     ) -> AppResult<Vec<LatestActiveTokenItem>> {
-        let mut results = Vec::new();
+        if chains.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        for c in chains {
+        let futs = chains.iter().map(|c| async move {
+            let mut results = Vec::new();
             let chain_idx = ChainIndex::new(c.chain_index);
             if let Ok((tokens, _)) = TokenRepo::new(&self.state.db).list(chain_idx, 10, 0).await {
+                let now = chrono::Utc::now().timestamp();
                 for t in tokens {
                     results.push(LatestActiveTokenItem {
                         wallet_address: c.address.clone(),
@@ -217,14 +266,15 @@ impl<'a> TokenService<'a> {
                         logo_url: t.logo_url.unwrap_or_default(),
                         address: t.address,
                         chain_id: c.chain_index.to_string(),
-                        last_tx_timestamp: chrono::Utc::now().timestamp(),
+                        last_tx_timestamp: now,
                         period_start: 0,
                         is_official: true,
                     });
                 }
             }
-        }
+            results
+        });
 
-        Ok(results)
+        Ok(futures::future::join_all(futs).await.into_iter().flatten().collect())
     }
 }

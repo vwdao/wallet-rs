@@ -523,12 +523,37 @@ impl TokenBalance for TonChain {
         let raw = result
             .get("balance")
             .and_then(|b| b.as_str())
-            .and_then(|s| s.parse::<u64>().ok())
-            .or_else(|| result.get("balance").and_then(|b| b.as_u64()))
+            .and_then(|s| s.parse::<u128>().ok())
+            .or_else(|| result.get("balance").and_then(|b| b.as_u64()).map(|n| n as u128))
             .unwrap_or(0);
         // Default jetton decimals; callers that need precision should pass
         // the right `decimals` from the token registry row.
-        Ok(Amount::new(Decimal::from(raw), 9))
+        Ok(Amount::new(wallet_types::decimal_from_u128(raw), 9))
+    }
+
+    /// Concurrent batch query for TON Jettons
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        if tokens.is_empty() {
+            return Ok(Vec::new());
+        }
+        let handles: Vec<_> = tokens
+            .iter()
+            .map(|t| {
+                let token = t.clone();
+                async move {
+                    let bal = self
+                        .token_balance(wallet, &token)
+                        .await
+                        .unwrap_or_else(|_| Amount::zero(9));
+                    (token, bal)
+                }
+            })
+            .collect();
+        Ok(futures::future::join_all(handles).await)
     }
 }
 

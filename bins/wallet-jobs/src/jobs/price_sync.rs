@@ -87,7 +87,8 @@ async fn fetch_and_store(
         let insert_result = async {
             let mut insert = ch
                 .client()
-                .insert("price_tick")
+                .insert::<PriceTick>("price_tick")
+                .await
                 .map_err(|e| wallet_error::AppError::Unavailable(e.to_string()))?;
             insert
                 .write(&PriceTick {

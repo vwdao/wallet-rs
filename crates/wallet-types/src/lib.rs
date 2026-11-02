@@ -62,6 +62,54 @@ impl ChainIndex {
             _ => return None,
         })
     }
+
+    pub fn native_decimals(self) -> u32 {
+        match self {
+            Self::BTC | Self::DOGE | Self::ZCASH => 8,
+            Self::SOL | Self::TON | Self::SUI => 9,
+            Self::TRON => 6,
+            _ => 18,
+        }
+    }
+
+    pub fn native_symbol(self) -> &'static str {
+        match self {
+            Self::BTC => "BTC",
+            Self::DOGE => "DOGE",
+            Self::ETH => "ETH",
+            Self::ZCASH => "ZEC",
+            Self::TRON => "TRX",
+            Self::SOL => "SOL",
+            Self::TON => "TON",
+            Self::SUI => "SUI",
+            Self::POL => "POL",
+            Self::BSC => "BNB",
+            Self::AVAX => "AVAX",
+            _ => "ETH",
+        }
+    }
+
+    pub fn native_name(self) -> &'static str {
+        match self {
+            Self::BTC => "Bitcoin",
+            Self::DOGE => "Dogecoin",
+            Self::ETH => "Ethereum",
+            Self::ZCASH => "Zcash",
+            Self::TRON => "TRON",
+            Self::SOL => "Solana",
+            Self::TON => "The Open Network",
+            Self::SUI => "Sui",
+            Self::POL => "Polygon",
+            Self::BSC => "BNB Smart Chain",
+            Self::BASE => "Base",
+            Self::ARB => "Arbitrum One",
+            Self::OP => "Optimism",
+            Self::AVAX => "Avalanche",
+            Self::HYPERLIQUID => "Hyperliquid",
+            Self::ROBINHOOD => "Robinhood",
+            _ => "Native Token",
+        }
+    }
 }
 
 impl fmt::Display for ChainIndex {

@@ -1,18 +1,14 @@
 //! TRON protobuf types + generated tonic gRPC client.
 //!
-//! The protobuf message definitions are re-exported from the
-//! [`tron_rs`] crate (which only ships the `.rs` for the prost
-//! `Message` types), and the `tonic`-generated gRPC client wrappers
-//! for `protocol.Wallet`, `protocol.WalletSolidity`, `protocol.WalletExtension`
-//! etc. are vendored from `tron-rs`'s `prost/protocol.tonic.rs`.
-//!
-//! Both halves are re-exported under a single `protocol` module so
-//! the `super::X` references in the vendored file resolve to the
-//! protobuf types via the `pub use tron_rs::tron::protocol::*` line.
+//! Message types are vendored from `tron-rs` 0.1.0's prost output so they
+//! compile against prost 0.14. The tonic client wrappers for
+//! `protocol.Wallet` / `protocol.WalletSolidity` / `protocol.WalletExtension`
+//! are vendored from the same crate's `protocol.tonic.rs` and patched for
+//! tonic 0.14 (`tonic::body::Body`, `tonic_prost::ProstCodec`).
 
 pub mod protocol {
-    pub use tron_rs::tron::protocol::*;
-
+    #![allow(dead_code, unused_imports, clippy::all)]
+    include!("protocol.rs");
     include!("wallet_client.rs");
 }
 

@@ -13,12 +13,12 @@ ton = []
 sui = []
 tron = [
     "dep:tonic",
+    "dep:tonic-prost",
     "dep:http",
     "dep:bytes",
     "dep:tokio-stream",
     "dep:prost",
     "dep:prost-types",
-    "dep:tron-rs",
     "dep:sha2",
 ]
 full = ["evm", "solana", "bitcoin", "zcash", "ton", "sui", "tron"]
@@ -42,10 +42,10 @@ parking_lot = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 tonic = { workspace = true, optional = true }
+tonic-prost = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 bytes = { workspace = true, optional = true }
 tokio-stream = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
 prost-types = { workspace = true, optional = true }
-tron-rs = { version = "0.1", optional = true }
 sha2 = { workspace = true, optional = true }

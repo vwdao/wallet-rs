@@ -61,7 +61,7 @@ impl BalanceReader for BitcoinChain {
             .rpc("getreceivedbyaddress", json!([addr.as_str(), 0]))
             .await?;
         let btc = v.as_f64().unwrap_or(0.0);
-        let sats = (btc * 1e8) as u64;
+        let sats = btc_to_sats(btc);
         Ok(Amount::new(Decimal::from(sats), 8))
     }
 }
