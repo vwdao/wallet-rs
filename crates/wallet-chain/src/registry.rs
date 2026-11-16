@@ -185,6 +185,29 @@ impl TokenBalance for ChainHandle {
             Self::Sui(c) => c.token_balance(wallet, token).await,
         }
     }
+
+    async fn token_balances_batch(
+        &self,
+        wallet: &Address,
+        tokens: &[Address],
+    ) -> AppResult<Vec<(Address, Amount)>> {
+        match self {
+            #[cfg(feature = "evm")]
+            Self::Evm(c) => c.token_balances_batch(wallet, tokens).await,
+            #[cfg(feature = "solana")]
+            Self::Solana(c) => c.token_balances_batch(wallet, tokens).await,
+            #[cfg(feature = "bitcoin")]
+            Self::Bitcoin(_) => Err(AppError::Unimplemented("bitcoin token balance".into())),
+            #[cfg(feature = "zcash")]
+            Self::Zcash(c) => c.token_balances_batch(wallet, tokens).await,
+            #[cfg(feature = "tron")]
+            Self::Tron(c) => c.token_balances_batch(wallet, tokens).await,
+            #[cfg(feature = "ton")]
+            Self::Ton(c) => c.token_balances_batch(wallet, tokens).await,
+            #[cfg(feature = "sui")]
+            Self::Sui(c) => c.token_balances_batch(wallet, tokens).await,
+        }
+    }
 }
 
 #[async_trait]
@@ -208,21 +231,7 @@ impl BlockSource for ChainHandle {
 #[async_trait]
 impl GasEstimator for ChainHandle {
     async fn estimate_gas(&self, tx: &GasEstimateRequest) -> AppResult<GasEstimate> {
-        match self {
-            #[cfg(feature = "evm")]
-            Self::Evm(c) => c.estimate_gas(tx).await,
-            // TON: masterchain gas price × message-size heuristic; see
-            // `TonChain::estimate_gas` for the BOC path.
-            #[cfg(feature = "ton")]
-            Self::Ton(c) => c.estimate_gas(tx).await,
-            // Sui: dry-run the signed transaction block.
-            #[cfg(feature = "sui")]
-            Self::Sui(c) => c.estimate_gas(tx).await,
-            // Zcash: zcashd fee estimate (ZEC/kB) converted to zat/vB.
-            #[cfg(feature = "zcash")]
-            Self::Zcash(c) => c.estimate_gas(tx).await,
-            _ => Err(AppError::Unimplemented("estimate_gas".into())),
-        }
+        self.as_gas_estimator().estimate_gas(tx).await
     }
 }
 

@@ -266,7 +266,7 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
                 "method": method,
                 "params": params,
                 "id": id,
-                "api_key": api_key,
+                "api_key": mask_api_key(&api_key),
                 "chain": chain,
                 "chain_index": chain_index,
                 "upstream_url": upstream_url,
@@ -284,6 +284,16 @@ async fn proxy_rpc(req: &mut Request, depot: &mut Depot, res: &mut Response) {
     match result {
         Ok(j) => res.render(j),
         Err(e) => res.render(e),
+    }
+}
+
+fn mask_api_key(key: &str) -> String {
+    let mut chars = key.chars();
+    let prefix: String = chars.by_ref().take(6).collect();
+    if chars.next().is_some() {
+        format!("{prefix}***")
+    } else {
+        "***".to_string()
     }
 }
 

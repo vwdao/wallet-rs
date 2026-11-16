@@ -27,29 +27,53 @@ impl SolanaChain {
     }
 
     async fn rpc(&self, method: &str, params: Value) -> AppResult<Value> {
-        let url = self.pool.next_url()?.to_string();
-        let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
-        let resp = self
-            .pool
-            .client()
-            .post(&url)
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| {
+        let attempts = self.pool.len().max(1);
+        let mut last_err = None;
+
+        for _ in 0..attempts {
+            let url = self.pool.next_url()?.to_string();
+            let body = json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": method,
+                "params": params.clone(),
+            });
+            let resp = match self.pool.client().post(&url).json(&body).send().await {
+                Ok(r) => r,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!("{url}: {e}")));
+                    continue;
+                }
+            };
+            let status = resp.status();
+            if !status.is_success() {
+                let text = resp.text().await.unwrap_or_default();
                 self.pool.mark_failure(&url);
-                AppError::Unavailable(e.to_string())
-            })?;
-        let v: Value = resp.json().await.map_err(|e| {
-            self.pool.mark_failure(&url);
-            AppError::Unavailable(e.to_string())
-        })?;
-        if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
-            self.pool.mark_failure(&url);
-            return Err(AppError::Unavailable(err.to_string()));
+                last_err = Some(AppError::Unavailable(format!(
+                    "rpc {url} returned HTTP {status}: {text}"
+                )));
+                continue;
+            }
+            let v: Value = match resp.json().await {
+                Ok(v) => v,
+                Err(e) => {
+                    self.pool.mark_failure(&url);
+                    last_err = Some(AppError::Unavailable(format!("{url}: {e}")));
+                    continue;
+                }
+            };
+            if let Some(err) = v.get("error").filter(|e| !e.is_null()) {
+                self.pool.mark_failure(&url);
+                last_err = Some(AppError::Unavailable(err.to_string()));
+                continue;
+            }
+            self.pool.mark_success(&url);
+            return Ok(v.get("result").cloned().unwrap_or(Value::Null));
         }
-        self.pool.mark_success(&url);
-        Ok(v.get("result").cloned().unwrap_or(Value::Null))
+
+        Err(last_err
+            .unwrap_or_else(|| AppError::Unavailable("all solana rpc attempts failed".into())))
     }
 
     /// Derive SPL Token Associated Token Account (ATA) address via RPC lookup.

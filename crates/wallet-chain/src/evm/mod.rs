@@ -628,15 +628,19 @@ impl EvmChain {
         let result = self
             .rpc("eth_getBlockByNumber", json!([block_hex, false]))
             .await?;
-        let hashes = result
+        let hashes: Vec<&str> = result
             .get("transactions")
             .and_then(|t| t.as_array())
-            .cloned()
+            .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
             .unwrap_or_default();
         let mut receipts = Vec::with_capacity(hashes.len());
-        for h in hashes {
-            if let Some(h) = h.as_str() {
-                if let Ok(r) = self.rpc("eth_getTransactionReceipt", json!([h])).await {
+        for chunk in hashes.chunks(50) {
+            let calls: Vec<(&str, Value)> = chunk
+                .iter()
+                .map(|h| ("eth_getTransactionReceipt", json!([h])))
+                .collect();
+            if let Ok(results) = self.batch_rpc(calls).await {
+                for r in results {
                     if !r.is_null() {
                         receipts.push(r);
                     }

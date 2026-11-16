@@ -31,9 +31,122 @@ fn default_max_connections() -> u32 {
     16
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RedisMode {
+    Standalone,
+    Cluster,
+    Sentinel,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedisConfig {
+    #[serde(default)]
     pub url: String,
+    #[serde(default)]
+    pub addrs: Vec<String>,
+    #[serde(default)]
+    pub mode: Option<RedisMode>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub db: Option<u8>,
+    #[serde(default)]
+    pub tls: bool,
+    #[serde(default)]
+    pub sentinel_service: Option<String>,
+}
+
+impl RedisConfig {
+    /// Resolve candidate connection URLs for standalone, cluster, or sentinel
+    /// deployments while remaining backward-compatible with a single `url`.
+    pub fn candidate_urls(&self) -> Vec<String> {
+        let mut raw_targets: Vec<&str> = self
+            .addrs
+            .iter()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let url_trimmed = self.url.trim();
+        if !url_trimmed.is_empty() && !raw_targets.contains(&url_trimmed) {
+            if raw_targets.is_empty() {
+                raw_targets.push(url_trimmed);
+            } else {
+                raw_targets.insert(0, url_trimmed);
+            }
+        }
+
+        let multi_addrs = self.addrs.iter().filter(|s| !s.trim().is_empty()).count() > 1;
+        raw_targets
+            .into_iter()
+            .map(|raw| self.normalize_url(raw, multi_addrs))
+            .collect()
+    }
+
+    fn normalize_url(&self, raw: &str, multi_addrs: bool) -> String {
+        let (has_tls_scheme, inferred_mode, rest) = if let Some(r) = raw.strip_prefix("rediss-cluster://") {
+            (true, Some(RedisMode::Cluster), r)
+        } else if let Some(r) = raw.strip_prefix("redis-cluster://") {
+            (false, Some(RedisMode::Cluster), r)
+        } else if let Some(r) = raw.strip_prefix("rediss-sentinel://") {
+            (true, Some(RedisMode::Sentinel), r)
+        } else if let Some(r) = raw.strip_prefix("redis-sentinel://") {
+            (false, Some(RedisMode::Sentinel), r)
+        } else if let Some(r) = raw.strip_prefix("rediss://") {
+            (true, None, r)
+        } else if let Some(r) = raw.strip_prefix("redis://") {
+            (false, None, r)
+        } else {
+            (false, None, raw)
+        };
+
+        let mode = self.mode.or(inferred_mode).unwrap_or({
+            if multi_addrs {
+                RedisMode::Cluster
+            } else {
+                RedisMode::Standalone
+            }
+        });
+        let tls = self.tls || has_tls_scheme;
+
+        let scheme = match (mode, tls) {
+            (RedisMode::Standalone, false) => "redis",
+            (RedisMode::Standalone, true) => "rediss",
+            (RedisMode::Cluster, false) => "redis-cluster",
+            (RedisMode::Cluster, true) => "rediss-cluster",
+            (RedisMode::Sentinel, false) => "redis-sentinel",
+            (RedisMode::Sentinel, true) => "rediss-sentinel",
+        };
+
+        let mut body = rest.to_string();
+        if !body.contains('@') {
+            let user = self.username.as_deref().unwrap_or("");
+            let pass = self.password.as_deref().unwrap_or("");
+            if !user.is_empty() || !pass.is_empty() {
+                body = format!("{user}:{pass}@{body}");
+            }
+        }
+
+        if mode == RedisMode::Standalone {
+            if let Some(db) = self.db {
+                let host_part = body.rsplit('@').next().unwrap_or(&body);
+                if !host_part.contains('/') {
+                    body = format!("{body}/{db}");
+                }
+            }
+        } else if mode == RedisMode::Sentinel {
+            if let Some(service) = self.sentinel_service.as_deref().filter(|s| !s.is_empty()) {
+                let host_part = body.rsplit('@').next().unwrap_or(&body);
+                if !host_part.contains('/') {
+                    body = format!("{body}/{service}");
+                }
+            }
+        }
+
+        format!("{scheme}://{body}")
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -271,5 +384,48 @@ mod tests {
         assert_eq!(doge.chain.family, "bitcoin");
         assert_eq!(doge.chain.confirmations, 12);
         assert!(!doge.chain.endpoints.is_empty());
+    }
+
+    #[test]
+    fn redis_config_resolves_standalone_cluster_and_sentinel() {
+        let standalone: RedisConfig = serde_yaml::from_str("url: redis://127.0.0.1:6379")
+            .expect("standalone yaml");
+        assert_eq!(
+            standalone.candidate_urls(),
+            vec!["redis://127.0.0.1:6379".to_string()]
+        );
+
+        let cluster_multi: RedisConfig = serde_yaml::from_str(
+            r#"
+addrs:
+  - "10.0.0.1:6379"
+  - "10.0.0.2:6379"
+password: "secret"
+tls: true
+"#,
+        )
+        .expect("cluster multi addrs yaml");
+        assert_eq!(
+            cluster_multi.candidate_urls(),
+            vec![
+                "rediss-cluster://:secret@10.0.0.1:6379".to_string(),
+                "rediss-cluster://:secret@10.0.0.2:6379".to_string(),
+            ]
+        );
+
+        let sentinel: RedisConfig = serde_yaml::from_str(
+            r#"
+mode: sentinel
+addrs:
+  - "10.0.0.10:26379"
+sentinel_service: "mymaster"
+password: "pw"
+"#,
+        )
+        .expect("sentinel yaml");
+        assert_eq!(
+            sentinel.candidate_urls(),
+            vec!["redis-sentinel://:pw@10.0.0.10:26379/mymaster".to_string()]
+        );
     }
 }
